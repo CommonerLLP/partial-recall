@@ -1,0 +1,98 @@
+# Local agent coordination — NEVER committed
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+WORKING.md
+
+# Local research / coordination notes — NEVER committed
+# (per CommonerLLP _org/private-repos.md)
+notes/
+memory/
+
+# Local agent-orchestration plans / specs / handoffs — NEVER committed
+docs/superpowers/
+HANDOFF.md
+STATE_OF_BRAIN.md
+TODO.md
+
+# Sessions log lives at repo root (committed); WORKING.md does not.
+# SESSION_LOG.md is the one exception — it IS committed for org transparency.
+!SESSION_LOG.md
+
+# Standard Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / lint / type cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Vector DB and indexes (large; user-data)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+vectors.sqlite*
+*.faiss
+*.index
+
+# Test fixtures — small synthetic SQLite snapshots are intentionally committed
+!tests/fixtures/**/*.sqlite
+
+# Model cache (downloaded ONNX models)
+.cache/
+models/
+.onnx_cache/
+
+# Build artifacts
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets — should never be in repo anyway, belt-and-suspenders
+.env
+.env.local
+*.pem
+*.key
+secrets/
