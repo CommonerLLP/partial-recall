@@ -10,7 +10,7 @@ This is **a localized tool that scholars customise to fit their own corpora**. I
 
 ## Status
 
-**v0.0.1 — first proof-of-life release.** Tested so far on Apple Silicon Mac (macOS, 16 GB RAM). Lower-spec hardware should work — the default ONNX provider is CPU-only — but has not yet been verified. Linux and Windows are v0.1.0 work. See [ROADMAP.md](./ROADMAP.md).
+**v0.0.9 — first public release; approaching v0.1.0 stability.** Tested so far on Apple Silicon Mac (macOS, 16 GB RAM). Lower-spec hardware should work — the default ONNX provider is CPU-only — but has not yet been verified. Linux and Windows are roadmap items. See [ROADMAP.md](./ROADMAP.md).
 
 ## Stance
 
