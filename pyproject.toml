@@ -1,0 +1,108 @@
+[project]
+name = "partial-recall"
+version = "0.0.0"
+description = "Semantic memory for your scholarly corpus. Multilingual, offline-first, free."
+readme = "README.md"
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Commoner LLP"},
+]
+keywords = [
+    "zotero",
+    "semantic-search",
+    "vector-search",
+    "scholarly",
+    "mcp",
+    "multilingual",
+    "humanities",
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Database :: Front-Ends",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "pydantic>=2.7.0",
+    "tomlkit>=0.13.0",
+    "typer[all]>=0.12.0",
+    "rich>=13.7.0",
+    "platformdirs>=4.2.0",
+    "structlog>=24.1.0",
+    "pypdf>=4.0.0",
+]
+
+[project.optional-dependencies]
+local = [
+    "onnxruntime>=1.17.0",
+    "tokenizers>=0.15.0",
+    "huggingface-hub>=0.20.0",
+    "numpy>=1.26.0",
+]
+gemini = [
+    "httpx>=0.27.0",
+]
+faiss = [
+    "faiss-cpu>=1.8.0",
+    "numpy>=1.26.0",
+]
+all = [
+    "partial-recall[local,gemini,faiss]",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "hypothesis>=6.100.0",
+]
+
+[project.scripts]
+partial-recall = "partial_recall.__main__:main"
+partial = "partial_recall.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/CommonerLLP/partial-recall"
+Issues = "https://github.com/CommonerLLP/partial-recall/issues"
+Documentation = "https://github.com/CommonerLLP/partial-recall#readme"
+Source = "https://github.com/CommonerLLP/partial-recall"
+
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/partial_recall/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/partial_recall"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "PT"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["src"]
+exclude = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
