@@ -1,6 +1,6 @@
 [project]
 name = "partial-recall"
-version = "0.0.9"
+version = "0.1.0"
 description = "Semantic memory for your scholarly corpus. Multilingual, offline-first, free."
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
