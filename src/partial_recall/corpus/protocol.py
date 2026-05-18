@@ -28,6 +28,15 @@ class CorpusAdapter(Protocol):
 
     def list_items(self, since: datetime | None = None) -> Iterator[Item]: ...
 
+    def count_items(self, since: datetime | None = None) -> int | None:
+        """Total items list_items() will yield, or None if unknown.
+
+        Used by progress UIs to show a determinate bar. Adapters whose
+        count is cheap (e.g. SQL COUNT(*)) should implement; adapters
+        where counting is as expensive as iterating may return None.
+        """
+        return None  # default: unknown
+
     def get_sources(self, item: Item) -> Iterator[Source]: ...
 
     def get_text(self, item: Item, source: Source) -> str | None: ...

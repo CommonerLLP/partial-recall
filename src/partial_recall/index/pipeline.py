@@ -1,15 +1,24 @@
 """Indexing pipeline: walk corpus → extract → chunk → embed → store.
 
-v0.0.1 = serial execution, no resume. Resumable indexing
-(indexing_progress table) is v0.1.0.
+Two modes:
 
-Idempotency: chunks are deduplicated via text_hash (see VectorStore.chunk_exists).
+* **New-run mode** (default): create a fresh `embedding_run`; embed every
+  chunk encountered into it. Idempotent for chunks (text_hash dedup).
+
+* **Extend-run mode** (`extend_run_id` set): re-use an existing run;
+  embed only those chunks that lack a vector for that run. This is the
+  top-up path — adds new items + backfills any chunk that the original
+  run didn't reach (e.g. a rehydrated import that stopped midway).
+
+Idempotency: chunks are deduplicated via text_hash. In extend mode,
+already-vectorised chunks are skipped without re-embedding.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -17,8 +26,15 @@ import structlog
 
 from partial_recall.chunk.recursive_char import CHUNKER_VERSION, chunk_text
 from partial_recall.corpus.protocol import CorpusAdapter
+from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.store.vector_store import VectorStore
+
+
+# A progress callback receives: the current item, its 1-based index, and
+# the total (None if the adapter can't say). Implementations should be
+# cheap — they fire once per item.
+ProgressCallback = Callable[[Item, int, int | None], None]
 
 log = structlog.get_logger(__name__)
 
@@ -29,6 +45,12 @@ class IndexResult:
     item_count: int
     chunk_count: int
     new_vector_count: int
+    skipped_chunk_count: int = 0  # extend-run: chunks already vectorised
+    extended: bool = False        # True if this was an extend-run pass
+
+
+class IncompatibleRunError(ValueError):
+    """Raised when an extend-run target is incompatible with the provider."""
 
 
 def _now_iso() -> str:
@@ -46,33 +68,95 @@ def run_indexing(
     provider: EmbeddingProvider,
     batch_size: int = 32,
     activate: bool = True,
+    extend_run_id: int | None = None,
+    allow_provider_mismatch: bool = False,
+    on_item_start: ProgressCallback | None = None,
 ) -> IndexResult:
-    """Run a full indexing pass.
+    """Run an indexing pass.
 
-    Creates a new embedding_run, walks the adapter for items, extracts text,
-    chunks it, embeds new chunks, writes vectors to the store. Returns IndexResult.
+    New-run mode (default): create a fresh `embedding_run`; embed every
+    walked chunk into it.
 
-    On completion (success path), marks the new run active if `activate=True`.
+    Extend-run mode (`extend_run_id` set): re-use that run; verify it is
+    vector-space-compatible with the provider (dimensions, quantization,
+    normalized, distance_metric); embed only chunks that lack a vector
+    in that run. The provider/model_name check can be suppressed with
+    `allow_provider_mismatch=True` — useful when extending an imported
+    run (e.g. cookjohn-imported with model='gemini-embedding-001') with
+    a fresh Gemini provider (provider='gemini', same model). Vector-space
+    fields are always enforced.
+
+    On completion of a new run, marks it active if `activate=True`.
+    On completion of an extend, run counts are recomputed but the run's
+    active/inactive state is left untouched.
     """
+    extended = extend_run_id is not None
     started_at = _now_iso()
     meta = provider.metadata
-    run_id = store.create_run(
-        provider=meta.provider,
-        model_name=meta.model_name,
-        model_version=meta.model_version,
-        dimensions=meta.dimensions,
-        quantization=provider.quantization.value,
-        normalized=meta.normalized,
-        distance_metric=meta.distance_metric.value,
-        chunker_name=CHUNKER_VERSION,
-        chunker_version=CHUNKER_VERSION,
-        started_at=started_at,
-    )
-    log.info("indexing.run.start", run_id=run_id, provider=meta.provider, model=meta.model_name)
+
+    if extended:
+        run = store.get_run(extend_run_id)  # type: ignore[arg-type]
+        if run is None:
+            raise IncompatibleRunError(f"extend-run target run_id={extend_run_id} not found")
+        # Vector-space compatibility: hard requirement. If these differ,
+        # vectors from the provider literally cannot live in the same space.
+        space_mismatches: list[str] = []
+        if run.dimensions != meta.dimensions:
+            space_mismatches.append(
+                f"dimensions: run={run.dimensions} provider={meta.dimensions}")
+        if run.quantization != provider.quantization.value:
+            space_mismatches.append(
+                f"quantization: run={run.quantization} provider={provider.quantization.value}")
+        if bool(run.normalized) != bool(meta.normalized):
+            space_mismatches.append(
+                f"normalized: run={run.normalized} provider={meta.normalized}")
+        if run.distance_metric != meta.distance_metric.value:
+            space_mismatches.append(
+                f"distance_metric: run={run.distance_metric} provider={meta.distance_metric.value}")
+        if space_mismatches:
+            raise IncompatibleRunError(
+                "extend-run vector-space mismatch: " + "; ".join(space_mismatches)
+            )
+        # Provider/model identity: soft check by default, hard if not waived.
+        if not allow_provider_mismatch:
+            ident_mismatches: list[str] = []
+            if run.provider != meta.provider:
+                ident_mismatches.append(
+                    f"provider: run={run.provider!r} provider={meta.provider!r}")
+            if run.model_name != meta.model_name:
+                ident_mismatches.append(
+                    f"model_name: run={run.model_name!r} provider={meta.model_name!r}")
+            if ident_mismatches:
+                raise IncompatibleRunError(
+                    "extend-run provider/model identity mismatch ("
+                    "pass allow_provider_mismatch=True to override): "
+                    + "; ".join(ident_mismatches)
+                )
+        run_id = run.run_id
+        log.info(
+            "indexing.run.extend",
+            run_id=run_id, provider=meta.provider, model=meta.model_name,
+            allow_provider_mismatch=allow_provider_mismatch,
+        )
+    else:
+        run_id = store.create_run(
+            provider=meta.provider,
+            model_name=meta.model_name,
+            model_version=meta.model_version,
+            dimensions=meta.dimensions,
+            quantization=provider.quantization.value,
+            normalized=meta.normalized,
+            distance_metric=meta.distance_metric.value,
+            chunker_name=CHUNKER_VERSION,
+            chunker_version=CHUNKER_VERSION,
+            started_at=started_at,
+        )
+        log.info("indexing.run.start", run_id=run_id, provider=meta.provider, model=meta.model_name)
 
     item_count = 0
     chunk_count = 0
     new_vector_count = 0
+    skipped_chunk_count = 0
 
     # Collect (chunk_id, text) pairs into batches for embedding
     pending: list[tuple[int, str]] = []
@@ -102,8 +186,19 @@ def run_indexing(
         pending.clear()
         return written
 
+    total_items: int | None = None
+    try:
+        total_items = adapter.count_items()
+    except Exception:  # noqa: BLE001 — progress is cosmetic; failure is non-fatal
+        total_items = None
+
     for item in adapter.list_items():
         item_count += 1
+        if on_item_start is not None:
+            try:
+                on_item_start(item, item_count, total_items)
+            except Exception:  # noqa: BLE001 — progress UI must never crash indexing
+                pass
         # Upsert item metadata
         store.upsert_item(
             item_key=item.item_key,
@@ -125,8 +220,7 @@ def run_indexing(
             chunks = chunk_text(text)
             for chunk in chunks:
                 th = _text_hash(chunk.text)
-                # Skip if same chunk (by hash+location) already exists for this chunker_version
-                if store.chunk_exists(
+                chunk_id = store.find_chunk_id(
                     item_key=item.item_key,
                     corpus=item.corpus,
                     source_type=source.source_type,
@@ -134,23 +228,8 @@ def run_indexing(
                     chunk_index=chunk.chunk_index,
                     chunker_version=CHUNKER_VERSION,
                     text_hash=th,
-                ):
-                    # Chunk already in DB; we still need to embed it for THIS run
-                    # Fetch its existing chunk_id
-                    row = store._conn.execute(
-                        """SELECT chunk_id FROM chunks
-                           WHERE corpus = ? AND item_key = ? AND source_type = ?
-                             AND (source_ref IS ? OR source_ref = ?)
-                             AND chunk_index = ? AND chunker_version = ? AND text_hash = ?
-                           LIMIT 1""",
-                        (item.corpus, item.item_key, source.source_type,
-                         source.source_ref, source.source_ref,
-                         chunk.chunk_index, CHUNKER_VERSION, th),
-                    ).fetchone()
-                    if row is None:
-                        continue
-                    chunk_id = row["chunk_id"]
-                else:
+                )
+                if chunk_id is None:
                     preview = chunk.text[:400] if len(chunk.text) > 400 else chunk.text
                     chunk_id = store.insert_chunk(
                         item_key=item.item_key,
@@ -167,12 +246,39 @@ def run_indexing(
                         indexed_at=_now_iso(),
                     )
                     chunk_count += 1
+                # Extend mode: skip chunks that already have a vector in
+                # this run. New-run mode: always embed (vectors table
+                # enforces UNIQUE(chunk_id, run_id); a fresh run never
+                # collides).
+                if extended and store.vector_exists(chunk_id, run_id):
+                    skipped_chunk_count += 1
+                    continue
                 pending.append((chunk_id, chunk.text))
                 if len(pending) >= batch_size:
                     flush_pending()
 
     # Flush final batch
     flush_pending()
+
+    if extended:
+        # Recompute the run's totals from the vectors table so the count
+        # reflects the post-top-up reality, not just this pass.
+        total_items, total_chunks = store.recompute_run_counts(run_id)
+        log.info(
+            "indexing.run.extend.complete",
+            run_id=run_id,
+            walked_items=item_count, new_chunks=chunk_count,
+            new_vectors=new_vector_count, skipped=skipped_chunk_count,
+            total_items=total_items, total_chunks=total_chunks,
+        )
+        return IndexResult(
+            run_id=run_id,
+            item_count=item_count,
+            chunk_count=chunk_count,
+            new_vector_count=new_vector_count,
+            skipped_chunk_count=skipped_chunk_count,
+            extended=True,
+        )
 
     completed_at = _now_iso()
     store.complete_run(

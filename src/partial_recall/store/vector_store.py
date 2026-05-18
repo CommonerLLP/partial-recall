@@ -104,6 +104,61 @@ class VectorStore:
             "UPDATE embedding_runs SET is_active = 1 WHERE run_id = ?", (run_id,)
         )
 
+    def get_run(self, run_id: int) -> RunInfo | None:
+        row = self._conn.execute(
+            """
+            SELECT run_id, provider, model_name, dimensions, quantization,
+                   normalized, distance_metric, chunker_version, is_active
+            FROM embedding_runs
+            WHERE run_id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return RunInfo(
+            run_id=row["run_id"], provider=row["provider"],
+            model_name=row["model_name"], dimensions=row["dimensions"],
+            quantization=row["quantization"], normalized=bool(row["normalized"]),
+            distance_metric=row["distance_metric"],
+            chunker_version=row["chunker_version"], is_active=bool(row["is_active"]),
+        )
+
+    def update_run_counts(
+        self,
+        run_id: int,
+        item_count: int,
+        chunk_count: int,
+    ) -> None:
+        self._conn.execute(
+            "UPDATE embedding_runs SET item_count = ?, chunk_count = ? WHERE run_id = ?",
+            (item_count, chunk_count, run_id),
+        )
+
+    def recompute_run_counts(self, run_id: int) -> tuple[int, int]:
+        """Recompute item_count and chunk_count for a run from its vectors.
+
+        Used after extend-run top-up. Returns (item_count, chunk_count).
+        """
+        row = self._conn.execute(
+            """
+            SELECT
+                COUNT(DISTINCT c.item_key) AS items,
+                COUNT(*) AS chunks
+            FROM vectors v
+            JOIN chunks c ON c.chunk_id = v.chunk_id
+            WHERE v.run_id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        items = int(row["items"] or 0)
+        chunks = int(row["chunks"] or 0)
+        self._conn.execute(
+            "UPDATE embedding_runs SET item_count = ?, chunk_count = ? WHERE run_id = ?",
+            (items, chunks, run_id),
+        )
+        return (items, chunks)
+
     def get_active_run(self) -> RunInfo | None:
         row = self._conn.execute(
             """
@@ -218,6 +273,45 @@ class VectorStore:
         )
         assert cur.lastrowid is not None  # AUTOINCREMENT INSERT always sets it
         return int(cur.lastrowid)
+
+    def find_chunk_id(
+        self,
+        *,
+        item_key: str,
+        corpus: str,
+        source_type: str,
+        source_ref: str | None,
+        chunk_index: int,
+        chunker_version: str,
+        text_hash: str,
+    ) -> int | None:
+        """Locate a chunk by its identity tuple; return chunk_id or None."""
+        row = self._conn.execute(
+            """
+            SELECT chunk_id FROM chunks
+            WHERE owner = 'local'
+              AND corpus = ?
+              AND item_key = ?
+              AND source_type = ?
+              AND (source_ref IS ? OR source_ref = ?)
+              AND chunk_index = ?
+              AND chunker_version = ?
+              AND text_hash = ?
+            LIMIT 1
+            """,
+            (
+                corpus, item_key, source_type, source_ref, source_ref,
+                chunk_index, chunker_version, text_hash,
+            ),
+        ).fetchone()
+        return None if row is None else int(row["chunk_id"])
+
+    def vector_exists(self, chunk_id: int, run_id: int) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM vectors WHERE chunk_id = ? AND run_id = ? LIMIT 1",
+            (chunk_id, run_id),
+        ).fetchone()
+        return row is not None
 
     def chunk_exists(
         self,
