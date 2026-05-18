@@ -73,6 +73,10 @@ def test_init_disabled_profile_re_prompts(
         for i, p in enumerate(init_mod.PROVIDER_PROFILES)
     )
     monkeypatch.setattr(init_mod, "PROVIDER_PROFILES", patched)
+    # Pin home to tmp_path so the Zotero default path *definitely*
+    # doesn't exist — wizard takes the deterministic "No Zotero
+    # found / Skip?" branch regardless of the host machine.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     cfg_path = tmp_path / "config.toml"
     stdin = "\n".join(
@@ -80,7 +84,6 @@ def test_init_disabled_profile_re_prompts(
             "3",  # disabled profile (patched)
             "1",  # fallback to option 1
             "",  # default vector DB
-            "n",  # use default Zotero? no
             "y",  # skip Zotero? yes
         ]
     ) + "\n"

@@ -169,9 +169,13 @@ def search_command(
         for r in results:
             title = (r.title or "(no title)")[:130]
             date = (r.date or "")[:10]
+            def _fmt(c: dict) -> str:
+                last = c.get("last") or ""
+                first = c.get("first") or ""
+                initial = f", {first[:1]}." if first else ""
+                return last + initial
             authors = "; ".join(
-                (c.get("last") or "") + ((", " + (c.get("first") or "")[:1] + ".") if c.get("first") else "")
-                for c in (r.creators or [])[:3]
+                _fmt(c) for c in (r.creators or [])[:3]
             ) or "—"
             preview = (r.text_preview or "")[:240].replace("\n", " ")
             src = _humanize_source(r)

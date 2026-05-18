@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from partial_recall.corpus.adapters.folder import FolderAdapter, _stable_item_key
-from partial_recall.corpus.types import ItemKind
 from partial_recall.errors import CorpusUnavailableError
 
 
@@ -42,7 +41,7 @@ def _seed(root: Path) -> None:
 @pytest.fixture
 def corpus_root(tmp_path: Path) -> Iterator[Path]:
     _seed(tmp_path)
-    yield tmp_path
+    return tmp_path
 
 
 @pytest.fixture

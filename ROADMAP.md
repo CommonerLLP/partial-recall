@@ -148,10 +148,10 @@ These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases 
 
 Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced by leverage; see `docs/superpowers/specs/2026-05-18-partial-recall-v020-v030-sequencing.md` for the full plan.
 
-### v0.2.1 (next): reliability foundation
-- [ ] A3 recorded API fixtures (`vcrpy`) for Gemini — zero live API calls in CI
-- [ ] A1 cross-platform CI matrix (macOS-14, Ubuntu-22.04, Windows-2022 × Python 3.11, 3.12)
-- [ ] A4 log-sanitization *CI gate* (the processor ships in v0.2.0; this is the test job that fails CI if a sensitive value leaks into a record)
+### v0.2.1: reliability foundation — SHIPPED 2026-05-18
+- [x] A3 recorded API fixtures (`vcrpy` + `pytest-recording`) for Gemini — infrastructure + `@pytest.mark.live` opt-in marker + scrubbing config. Cassettes themselves recorded in a follow-up once a real key is used.
+- [x] A1 cross-platform CI matrix — GitHub Actions workflow at `.github/workflows/test.yml`, macOS-14 / Ubuntu-22.04 / Windows-2022 × Python 3.11, 3.12, with ruff lint + pytest (skipping slow + live) + a doctor surface-smoke on non-Windows.
+- [x] A4 log-sanitization CI gate — integration test in `tests/test_logging_ci_gate.py` exercises the real structlog pipeline; caught and closed a value-shape detection gap (Gemini / GitHub / OpenAI / JWT / PEM shapes redacted regardless of field name).
 
 ### v0.2.2: resumable indexing
 - [ ] B4 full `indexing_progress` writes per batch

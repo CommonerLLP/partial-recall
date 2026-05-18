@@ -1,0 +1,50 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-22.04, windows-2022]
+        python: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install partial-recall + dev + gemini extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,gemini]"
+
+      - name: Lint (ruff)
+        run: |
+          python -m ruff check src tests
+
+      - name: Run tests (skip slow + live)
+        run: |
+          python -m pytest tests/ -v -m "not slow and not live" --tb=short
+
+      - name: Doctor surface smoke (non-Windows)
+        if: matrix.os != 'windows-2022'
+        run: |
+          partial-recall doctor || true
+          partial-recall --version
