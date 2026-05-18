@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import signal
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -47,10 +48,32 @@ class IndexResult:
     new_vector_count: int
     skipped_chunk_count: int = 0  # extend-run: chunks already vectorised
     extended: bool = False        # True if this was an extend-run pass
+    interrupted: bool = False     # True if SIGINT/SIGTERM caused early exit
+    last_processed_key: str | None = None  # set when interrupted
 
 
 class IncompatibleRunError(ValueError):
     """Raised when an extend-run target is incompatible with the provider."""
+
+
+class _InterruptFlag:
+    """Mutable container set by signal handlers; checked between items.
+
+    Avoids raising KeyboardInterrupt mid-batch (which would lose the
+    pending Gemini-paid batch). The pipeline checks this between items
+    and exits cleanly after the next flush.
+    """
+
+    def __init__(self) -> None:
+        self.requested = False
+        self.signal_name: str | None = None
+
+    def request(self, signum: int, _frame: object) -> None:
+        self.requested = True
+        try:
+            self.signal_name = signal.Signals(signum).name
+        except (ValueError, AttributeError):  # noqa: BLE001 — defensive
+            self.signal_name = f"signal-{signum}"
 
 
 def _now_iso() -> str:
@@ -192,8 +215,53 @@ def run_indexing(
     except Exception:  # noqa: BLE001 — progress is cosmetic; failure is non-fatal
         total_items = None
 
+    # Install signal handlers so SIGINT (Ctrl-C) and SIGTERM finish the
+    # current batch cleanly instead of losing in-flight Gemini-paid
+    # work. We capture the previous handlers so the pipeline plays nice
+    # with callers that install their own (tests, embedding daemons).
+    interrupt = _InterruptFlag()
+    previous_sigint = signal.getsignal(signal.SIGINT)
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    try:
+        signal.signal(signal.SIGINT, interrupt.request)
+        signal.signal(signal.SIGTERM, interrupt.request)
+    except (ValueError, OSError):
+        # Not on the main thread, or signal module unavailable. Skip
+        # signal-handling; the pipeline still runs, just without
+        # graceful shutdown on Ctrl-C.
+        pass
+
+    # Track the last item whose chunks were ALL successfully embedded +
+    # written for this run. Updated only at item boundaries, never
+    # mid-source — so a saved last_processed_key always points at an
+    # item whose work is fully durable in vectors.
+    last_completed_key: str | None = None
+
+    # Fast-skip ahead of last_processed_key on resume. Optimisation
+    # only: chunk-level dedup (vector_exists) is the correctness
+    # guarantee; this just avoids re-walking sources for items we
+    # know are fully done.
+    resume_from_key = (
+        store.get_indexing_progress(run_id) if extended else None
+    )
+    skipping_resume = resume_from_key is not None
+
     for item in adapter.list_items():
         item_count += 1
+        # Resume fast-skip: items whose item_key sorts at or before
+        # last_processed_key are known-done. Only honoured when
+        # adapter ordering is deterministic; chunk-level dedup catches
+        # any miss.
+        if skipping_resume and resume_from_key is not None:
+            if item.item_key <= resume_from_key:
+                continue
+            skipping_resume = False
+
+        if interrupt.requested:
+            log.info("indexing.run.interrupt.requested",
+                     signal=interrupt.signal_name,
+                     last_completed_key=last_completed_key)
+            break
         if on_item_start is not None:
             # Progress UI must never crash indexing.
             with contextlib.suppress(Exception):
@@ -256,8 +324,52 @@ def run_indexing(
                 if len(pending) >= batch_size:
                     flush_pending()
 
-    # Flush final batch
+        # End of this item's sources. Force a flush so progress write
+        # below reflects a fully-durable state — every chunk for this
+        # item is in vectors before we mark the item complete.
+        flush_pending()
+        store.set_indexing_progress(
+            run_id=run_id, last_processed_key=item.item_key
+        )
+        last_completed_key = item.item_key
+
+    # Flush final batch (no-op if we just flushed at item boundary)
     flush_pending()
+
+    # Detect interrupted exit BEFORE the "completion" path so we don't
+    # mark the run as complete or activate it. Restore signal handlers
+    # whether we exit cleanly or via interrupt.
+    try:
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
+    except (ValueError, OSError):
+        pass
+
+    if interrupt.requested:
+        log.warning(
+            "indexing.run.interrupted",
+            run_id=run_id,
+            signal=interrupt.signal_name,
+            last_completed_key=last_completed_key,
+            walked_items=item_count,
+            new_vectors=new_vector_count,
+        )
+        return IndexResult(
+            run_id=run_id,
+            item_count=item_count,
+            chunk_count=chunk_count,
+            new_vector_count=new_vector_count,
+            skipped_chunk_count=skipped_chunk_count,
+            extended=extended,
+            interrupted=True,
+            last_processed_key=last_completed_key,
+        )
+
+    # Clean-completion paths below: clear progress so the next run
+    # walks the full corpus (fast-skip would otherwise treat the
+    # last-processed-key from this run as authoritative, missing any
+    # new items the user added that sort before it).
+    store.clear_indexing_progress(run_id)
 
     if extended:
         # Recompute the run's totals from the vectors table so the count

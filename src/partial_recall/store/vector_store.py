@@ -135,6 +135,50 @@ class VectorStore:
             (item_count, chunk_count, run_id),
         )
 
+    # ------------------------------------------------------------------
+    # Indexing progress (v0.2.2 B4)
+    # ------------------------------------------------------------------
+    def set_indexing_progress(
+        self,
+        *,
+        run_id: int,
+        last_processed_key: str | None,
+    ) -> None:
+        """Record per-run progress after a successful batch flush.
+
+        Called by the pipeline after each batch is fully written to
+        vectors. `last_processed_key` is the item_key of the last item
+        whose chunks were all flushed. On resume, items with
+        item_key <= last_processed_key (in deterministic sort order)
+        can be fast-skipped without re-walking their sources.
+        """
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        self._conn.execute(
+            """
+            INSERT INTO indexing_progress (run_id, last_processed_key, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT (run_id) DO UPDATE SET
+                last_processed_key = excluded.last_processed_key,
+                updated_at = excluded.updated_at
+            """,
+            (run_id, last_processed_key, now),
+        )
+
+    def get_indexing_progress(self, run_id: int) -> str | None:
+        """Return last_processed_key for a run, or None if no progress recorded."""
+        row = self._conn.execute(
+            "SELECT last_processed_key FROM indexing_progress WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        return row["last_processed_key"] if row is not None else None
+
+    def clear_indexing_progress(self, run_id: int) -> None:
+        """Drop the progress row for a run (e.g. when a run completes cleanly)."""
+        self._conn.execute(
+            "DELETE FROM indexing_progress WHERE run_id = ?", (run_id,)
+        )
+
     def recompute_run_counts(self, run_id: int) -> tuple[int, int]:
         """Recompute item_count and chunk_count for a run from its vectors.
 

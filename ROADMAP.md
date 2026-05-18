@@ -153,9 +153,9 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 - [x] A1 cross-platform CI matrix — GitHub Actions workflow at `.github/workflows/test.yml`, macOS-14 / Ubuntu-22.04 / Windows-2022 × Python 3.11, 3.12, with ruff lint + pytest (skipping slow + live) + a doctor surface-smoke on non-Windows.
 - [x] A4 log-sanitization CI gate — integration test in `tests/test_logging_ci_gate.py` exercises the real structlog pipeline; caught and closed a value-shape detection gap (Gemini / GitHub / OpenAI / JWT / PEM shapes redacted regardless of field name).
 
-### v0.2.2: resumable indexing
-- [ ] B4 full `indexing_progress` writes per batch
-- [ ] B5 CLI signal handling (clean SIGINT / SIGTERM during indexing)
+### v0.2.2: resumable indexing — SHIPPED 2026-05-18
+- [x] B4 `indexing_progress` writes per item, with fast-skip on resume (items at-or-below last_processed_key skipped); chunk-level vector_exists dedup remains the correctness guarantee. Progress cleared on clean completion so new items added between runs aren't accidentally skipped.
+- [x] B5 SIGINT / SIGTERM handled in `run_indexing`: handler sets a flag, current batch flush completes, progress is persisted, function returns `IndexResult(interrupted=True, last_processed_key=…)` instead of raising. Signal handlers restored on exit so callers' own installations stay intact.
 
 ### v0.2.3: MCP tool surface
 - [ ] C1 `semantic_status`
