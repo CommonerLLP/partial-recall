@@ -102,7 +102,10 @@ def _result_to_dict(r: SearchResult) -> dict:
 def search_command(
     query: str = typer.Argument(..., help="Natural-language query."),  # noqa: B008
     top_k: int = typer.Option(  # noqa: B008
-        10, "--top-k", "-k", help="Number of results."
+        10,
+        "--limit", "-n",
+        "--top-k", "-k",
+        help="Number of results to return.",
     ),
     config: Path = typer.Option(  # noqa: B008
         None,

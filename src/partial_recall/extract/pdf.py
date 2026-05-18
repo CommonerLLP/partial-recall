@@ -39,11 +39,31 @@ def extract_pdf_text_by_page(path: Path) -> list[str]:
         raise PdfExtractionError(
             f"PDF is encrypted (no decrypt support in v0.0.1): {path}"
         )
+    # pypdf can raise inside reader.pages iteration itself (e.g. "Cannot
+    # find Root object in pdf" for a PDF missing its Catalog). Wrap the
+    # whole iteration so one severely-malformed PDF doesn't kill an
+    # indexing run mid-batch.
     pages: list[str] = []
-    for page in reader.pages:
+    try:
+        page_iter = iter(reader.pages)
+    except (PdfReadError, PdfStreamError) as e:
+        raise PdfExtractionError(
+            f"cannot enumerate pages of {path}: {e}"
+        ) from e
+    while True:
+        try:
+            page = next(page_iter)
+        except StopIteration:
+            break
+        except (PdfReadError, PdfStreamError):
+            # Cross-ref recovery exhausted; stop reading this PDF, keep
+            # whatever pages we already got.
+            break
+        except Exception:  # noqa: BLE001 — pypdf can throw arbitrary internals
+            break
         try:
             text = page.extract_text() or ""
-        except Exception:  # noqa: BLE001 — pypdf can throw various internal errors
+        except Exception:  # noqa: BLE001 — per-page extraction can also fail
             text = ""
         pages.append(text)
     return pages

@@ -1,16 +1,24 @@
 """ZoteroAdapter — reads from Zotero's SQLite database.
 
-v0.0.1 scope: PDFs + abstracts only. Notes + annotations deferred to v0.1.0.
+Sources yielded per parent item, in order: abstract (if present), one
+`pdf` source per PDF attachment, one `note` source per child note,
+one `annotation` source per textual annotation on each PDF attachment.
 
 Opens zotero.sqlite in read-only mode (mode=ro&immutable=1) so it can run
 concurrently with Zotero itself. Falls back to zotero.sqlite.bak if the
 main DB is locked.
+
+Annotation type filter: Zotero annotation `type` is an integer —
+1=highlight, 2=note, 3=image, 4=ink, 5=underline. We index types 1, 2, 5
+(text-bearing) and skip 3, 4 (no text; multimodal handling is v0.4.0).
 """
 
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from datetime import datetime
@@ -19,6 +27,32 @@ from pathlib import Path
 from partial_recall.corpus.types import Item, ItemKind, Source
 from partial_recall.errors import CorpusUnavailableError
 from partial_recall.extract.pdf import PdfExtractionError, extract_pdf_text
+
+# Zotero annotation types we treat as text. See module docstring.
+_TEXTUAL_ANNOTATION_TYPES = (1, 2, 5)
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+# After stripping inline tags around punctuation we can get "word ." —
+# collapse whitespace before terminal/clause punctuation.
+_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([.,;:!?)\]])")
+
+
+def _strip_html(s: str | None) -> str:
+    """Naive HTML → text for Zotero notes.
+
+    Zotero stores notes as fairly simple HTML produced by its own editor.
+    A full parser is overkill; strip tags, decode entities, collapse
+    whitespace, and fix space-before-punctuation artefacts from inline
+    tag removal.
+    """
+    if not s:
+        return ""
+    text = _TAG_RE.sub(" ", s)
+    text = html.unescape(text)
+    text = _WS_RE.sub(" ", text)
+    text = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
+    return text.strip()
 
 
 class ZoteroAdapter:
@@ -34,6 +68,18 @@ class ZoteroAdapter:
         if not self.sqlite_path.exists():
             raise CorpusUnavailableError(f"Zotero DB not found: {self.sqlite_path}")
         self._conn = self._open_readonly(self.sqlite_path)
+        # Feature flags: some test fixtures (and possibly trimmed Zotero
+        # forks) omit these tables. Treat their absence as "no notes /
+        # annotations to index" rather than as a hard error.
+        self._has_notes = self._table_exists("itemNotes")
+        self._has_annotations = self._table_exists("itemAnnotations")
+
+    def _table_exists(self, name: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+            (name,),
+        ).fetchone()
+        return row is not None
 
     def close(self) -> None:
         self._conn.close()
@@ -57,6 +103,19 @@ class ZoteroAdapter:
             raise CorpusUnavailableError(
                 f"cannot open Zotero DB {path} (locked? not a Zotero DB? {e})"
             ) from e
+
+    def count_items(self, since: datetime | None = None) -> int | None:
+        """Cheap COUNT(*) over the same filter list_items() uses."""
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM items i
+            JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
+            WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND it.typeName NOT IN ('attachment', 'note')
+            """,
+        ).fetchone()
+        return int(row["n"]) if row is not None else None
 
     def list_items(self, since: datetime | None = None) -> Iterator[Item]:
         """Enumerate top-level items (not attachments, not deleted)."""
@@ -90,7 +149,12 @@ class ZoteroAdapter:
             )
 
     def get_sources(self, item: Item) -> Iterator[Source]:
-        """Yield abstract source (if present) + one pdf source per PDF attachment."""
+        """Yield all indexable sources attached to a parent item.
+
+        Order: abstract → pdf(s) → note(s) → annotation(s). Deleted
+        children are excluded. Annotations on deleted attachments are
+        also excluded (the SQL only joins non-deleted attachments).
+        """
         row = self._conn.execute(
             "SELECT itemID FROM items WHERE key = ?", (item.item_key,)
         ).fetchone()
@@ -104,7 +168,9 @@ class ZoteroAdapter:
             SELECT a.itemID, a.path, child.key as att_key
             FROM itemAttachments a
             JOIN items child ON child.itemID = a.itemID
-            WHERE a.parentItemID = ? AND a.contentType = 'application/pdf'
+            WHERE a.parentItemID = ?
+              AND a.contentType = 'application/pdf'
+              AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
             """,
             (item_id,),
         ).fetchall()
@@ -112,6 +178,48 @@ class ZoteroAdapter:
             yield Source(
                 source_type="pdf",
                 source_ref=f"pdf:{att['att_key']}",
+                kind=ItemKind.TEXT,
+            )
+        note_rows = self._conn.execute(
+            """
+            SELECT child.key AS note_key
+            FROM itemNotes n
+            JOIN items child ON child.itemID = n.itemID
+            WHERE n.parentItemID = ?
+              AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
+            """,
+            (item_id,),
+        ).fetchall() if self._has_notes else []
+        for nr in note_rows:
+            yield Source(
+                source_type="note",
+                source_ref=f"note:{nr['note_key']}",
+                kind=ItemKind.TEXT,
+            )
+        # Annotations live on the attachment (the PDF), not on the parent
+        # bibliographic item. Two-hop join: parent → attachment → annotation.
+        # Use a placeholder-list for the type filter so the IN-clause stays
+        # parameterised.
+        type_placeholders = ",".join("?" * len(_TEXTUAL_ANNOTATION_TYPES))
+        ann_rows = self._conn.execute(
+            f"""
+            SELECT child.key AS ann_key
+            FROM itemAnnotations ann
+            JOIN itemAttachments att ON att.itemID = ann.parentItemID
+            JOIN items child ON child.itemID = ann.itemID
+            WHERE att.parentItemID = ?
+              AND att.contentType = 'application/pdf'
+              AND att.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND ann.type IN ({type_placeholders})
+            ORDER BY ann.sortIndex
+            """,
+            (item_id, *_TEXTUAL_ANNOTATION_TYPES),
+        ).fetchall() if self._has_annotations else []
+        for ar in ann_rows:
+            yield Source(
+                source_type="annotation",
+                source_ref=f"annotation:{ar['ann_key']}",
                 kind=ItemKind.TEXT,
             )
 
@@ -126,6 +234,10 @@ class ZoteroAdapter:
                 return extract_pdf_text(pdf_path)
             except PdfExtractionError:
                 return None
+        if source.source_type == "note":
+            return self._get_note_text(source)
+        if source.source_type == "annotation":
+            return self._get_annotation_text(source)
         return None
 
     def get_image(self, item: Item, source: Source) -> bytes | None:
@@ -179,6 +291,59 @@ class ZoteroAdapter:
         h.update(b"\x00")
         h.update((abstract or "").encode("utf-8"))
         return h.hexdigest()
+
+    def _get_note_text(self, source: Source) -> str | None:
+        if not self._has_notes:
+            return None
+        if not source.source_ref or not source.source_ref.startswith("note:"):
+            return None
+        key = source.source_ref[len("note:"):]
+        row = self._conn.execute(
+            """
+            SELECT n.note, n.title
+            FROM itemNotes n
+            JOIN items i ON i.itemID = n.itemID
+            WHERE i.key = ?
+            """,
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        body = _strip_html(row["note"])
+        title = (row["title"] or "").strip()
+        if title and not body.startswith(title):
+            return f"{title}\n\n{body}" if body else title
+        return body or None
+
+    def _get_annotation_text(self, source: Source) -> str | None:
+        if not self._has_annotations:
+            return None
+        if not source.source_ref or not source.source_ref.startswith("annotation:"):
+            return None
+        key = source.source_ref[len("annotation:"):]
+        row = self._conn.execute(
+            """
+            SELECT ann.text, ann.comment, ann.pageLabel
+            FROM itemAnnotations ann
+            JOIN items i ON i.itemID = ann.itemID
+            WHERE i.key = ?
+            """,
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        text = (row["text"] or "").strip()
+        comment = (row["comment"] or "").strip()
+        page = (row["pageLabel"] or "").strip()
+        parts: list[str] = []
+        if text:
+            parts.append(text)
+        if comment:
+            parts.append(f"— {comment}")
+        if page:
+            parts.append(f"(p. {page})")
+        joined = " ".join(parts).strip()
+        return joined or None
 
     def _resolve_pdf_path(self, source: Source) -> Path | None:
         """Resolve a PDF source_ref like 'pdf:<key>' to a filesystem path.

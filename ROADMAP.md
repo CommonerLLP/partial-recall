@@ -93,48 +93,87 @@ the public can `pipx install`.
 
 ---
 
-## v0.2.0 — Feature-complete release
+## v0.2.0 — First sliceable step toward feature-complete
 
-**Goal:** the release that was originally labelled v0.1.0 in this file.
-Honors the full audience. Cross-platform. All four MCP tools.
-Resumable. Tested.
+**Goal:** ship the load-bearing indexing-completeness slice (Zotero notes
++ annotations + non-Zotero corpora) plus the diagnostic + safety surface
+that emerged from real first-user testing. The remaining items from the
+originally-planned v0.2.0 scope are now sequenced across v0.2.x
+point-releases through to v0.3.0 (see those sections below).
 
 ### Adds (on top of v0.1.0)
 
-- [ ] Secrets via `keyring` (macOS Keychain / Linux Secret Service / Windows Credential Manager) with env-var fallback
-- [ ] Resumable indexing (full `indexing_progress` implementation; handles SIGINT/SIGTERM/network drop/kill -9)
-- [ ] Notes indexing in `ZoteroAdapter`
-- [ ] Annotations indexing in `ZoteroAdapter`
-- [ ] `FolderAdapter` (PDF/EPUB/TXT/MD/DOCX; recursive; `.partial-recallignore` support)
-- [ ] MCP tool: `semantic_status`
-- [ ] MCP tool: `search_fulltext` (FTS5 virtual table)
-- [ ] MCP tool: `get_item_details`
-- [ ] Faiss accelerator command (`partial-recall runs build-faiss RUN_ID`)
-- [ ] Full `doctor` command (capability audit; structured report)
-- [ ] CLI signal handling (SIGINT/SIGTERM clean exit during indexing)
-- [ ] HTTP transport mode (`partial-recall serve --http --port N`; auth abstraction shipped, `none` only enabled)
-- [ ] Multilingual test fixtures: English, Hindi, Tamil, Bengali, Persian, Arabic, Hebrew, Swahili, Spanish, Mandarin
-- [ ] Cross-platform CI: GitHub Actions matrix (macOS-14, Ubuntu-22.04, Windows-2022) × (Python 3.11, 3.12)
-- [ ] Property-based tests (Hypothesis) for chunker + vector packing + text_hash stability
-- [ ] Recorded API fixtures (`vcrpy`) for Gemini — zero live API calls in CI
-- [ ] Log-sanitization test (CI-blocking)
-- [ ] Auto-generated config reference from Pydantic
-- [ ] i18n scaffolding (gettext `.po` infrastructure; English-only ship)
-- [ ] `CITATION.cff` for scholars who cite the tool
-- [ ] README + install docs + 5-min walkthrough script + troubleshooting
+- [x] Notes indexing in `ZoteroAdapter`
+- [x] Annotations indexing in `ZoteroAdapter` (textual types: highlight, note, underline)
+- [x] `FolderAdapter` (PDF/TXT/MD recursive walk; `.partial-recallignore`; EPUB/DOCX recognised but deferred)
+- [x] Top-up indexing mode: `index --extend` / `--extend-run RUN_ID` / `--allow-provider-mismatch`
+- [x] `doctor` command — 9 diagnostic checks (python, config, embedding provider, vector store, run-vs-config match, Zotero source, folder source, macOS UF_HIDDEN on .pth, disk space); `--json` for tooling
+- [x] Indexer UX: determinate progress bar with current-item title, time-remaining estimate, plain-English explainers; pypdf noise filter with humanised end-of-run summary
+- [x] PDF robustness: extractor survives malformed PDFs (missing `/Root`, mid-iter cross-reference exhaustion) — single bad PDF skips that item instead of killing the run
+- [x] Log-sanitization processor: structlog records redact API-key-shaped values and absolute home paths (defence-in-depth public/private firewall)
+- [x] CLI ergonomics: `partial search --limit` / `-n` as scholar-shaped alias for `--top-k` / `-k`
+- [x] `CorpusAdapter` Protocol gained optional `count_items()` for determinate progress UIs (backwards-compatible default `None`)
 
-### Success criteria
+### Known gaps shipped with v0.2.0 (sequenced into v0.2.x)
 
-- [ ] All v0.0.1 + v0.1.0 functionality still works
-- [ ] Scholar on a 4 GB Windows 11 laptop can install + index 500 PDFs + serve via MCP
-- [ ] Scholar on a 4 GB Linux laptop (no desktop environment) can install + index + use the CLI directly
-- [ ] All 4 MCP tools return well-formed JSON-RPC responses
-- [ ] Indexing resumes correctly after `kill -9`, network drop mid-batch, OS restart
-- [ ] CI green on macOS, Linux, Windows
-- [ ] Doctor command catches every documented failure mode with an actionable hint
-- [ ] No raw Python tracebacks shown to user; all errors typed and explained
-- [ ] 85% line coverage on `src/partial_recall/` (excluding `__main__.py` and CLI argument-parsing)
-- [ ] README, install docs, walkthrough video script, troubleshooting page all published
+These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases as separate sliceable units:
+
+- Secrets via `keyring` (env-var fallback ships now; keyring → v0.2.x)
+- Full resumable indexing (`indexing_progress` writes per-batch, SIGINT/SIGTERM/`kill -9` resume)
+- CLI signal handling
+- MCP tools: `semantic_status`, `search_fulltext` (FTS5), `get_item_details`
+- HTTP transport stub + auth abstraction
+- Faiss accelerator command (the `[faiss]` extra + table exist; build path → v0.2.x)
+- Cross-platform CI matrix (macOS-14, Ubuntu-22.04, Windows-2022 × Python 3.11, 3.12)
+- Property-based tests (Hypothesis) for chunker, vector packing, text_hash
+- Recorded `vcrpy` cassettes for Gemini in CI
+- Log-sanitization *CI-blocking* test (processor + unit tests ship now; CI gate → v0.2.x)
+- Auto-generated config reference from Pydantic
+- Multilingual test fixtures (10 scripts)
+- i18n scaffolding (gettext `.po`)
+- `CITATION.cff`
+- README expansion + 5-min walkthrough + troubleshooting
+
+### Success criteria (v0.2.0 line)
+
+- [x] All v0.0.1 + v0.1.0 functionality still works (205 tests passing on the v0.2.0 commit)
+- [x] Indexing top-up against a rehydrated Gemini corpus succeeds on Aakash's 29,937-item personal Zotero library (load-bearing first user)
+- [x] `doctor` surfaces the cookjohn-imported → fresh-Gemini-provider mismatch as a named warning with an actionable hint
+- [x] Notes + annotations indexable: 858 notes + 9,477 textual annotations enumerable in the personal corpus
+- [x] FolderAdapter walks a heterogeneous test corpus, respects `.partial-recallignore`, dispatches per-extension
+
+---
+
+## v0.2.x — point releases toward feature-complete
+
+Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced by leverage; see `docs/superpowers/specs/2026-05-18-partial-recall-v020-v030-sequencing.md` for the full plan.
+
+### v0.2.1 (next): reliability foundation
+- [ ] A3 recorded API fixtures (`vcrpy`) for Gemini — zero live API calls in CI
+- [ ] A1 cross-platform CI matrix (macOS-14, Ubuntu-22.04, Windows-2022 × Python 3.11, 3.12)
+- [ ] A4 log-sanitization *CI gate* (the processor ships in v0.2.0; this is the test job that fails CI if a sensitive value leaks into a record)
+
+### v0.2.2: resumable indexing
+- [ ] B4 full `indexing_progress` writes per batch
+- [ ] B5 CLI signal handling (clean SIGINT / SIGTERM during indexing)
+
+### v0.2.3: MCP tool surface
+- [ ] C1 `semantic_status`
+- [ ] C2 `search_fulltext` (FTS5 virtual table, schema migration 0002)
+- [ ] C3 `get_item_details`
+
+### v0.2.4: operability + reach
+- [ ] D2 keyring secrets (macOS Keychain / Linux Secret Service / Windows Credential Manager)
+- [ ] D3 Faiss accelerator command (`partial-recall runs build-faiss RUN_ID`)
+- [ ] C4 HTTP transport stub (`serve --http --port N`; auth abstraction; `none` enabled)
+
+### v0.2.5: docs, audit, citation
+- [ ] A2 property-based tests (Hypothesis) for chunker + vector packing + text_hash
+- [ ] A5 auto-generated config reference from Pydantic
+- [ ] E1 multilingual test fixtures (10 scripts)
+- [ ] E2 i18n scaffolding (gettext `.po`; English-only ship)
+- [ ] E3 `CITATION.cff`
+- [ ] E4 README + install docs + 5-min walkthrough script + troubleshooting page
 
 ---
 
