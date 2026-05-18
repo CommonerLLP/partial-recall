@@ -105,7 +105,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Strip Gemini key env vars so checks see a clean slate."""
     monkeypatch.delenv("PARTIAL_RECALL_GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    yield
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +337,7 @@ def test_doctor_cli_exits_nonzero_when_any_check_fails(
 def test_check_result_is_immutable() -> None:
     """Defensive: CheckResult is frozen so consumers can't mutate results
     en route to renderers."""
+    from dataclasses import FrozenInstanceError
     r = CheckResult(name="x", status="ok", message="y")
-    with pytest.raises(Exception):  # FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
         r.status = "fail"  # type: ignore[misc]

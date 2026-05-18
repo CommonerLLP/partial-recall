@@ -34,7 +34,6 @@ import structlog
 
 from partial_recall.logging_setup import configure_logging
 
-
 # Plausible-shape Gemini key: prefix + 33 chars to hit the 39-char total.
 _FAKE_GEMINI_KEY = "AIzaSy" + "X" * 33
 _SENSITIVE_VALUES = {

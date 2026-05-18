@@ -158,7 +158,7 @@ class FolderAdapter:
                 creators=[],
                 abstract=None,
                 metadata_hash=hashlib.sha256(
-                    f"{path.resolve()}|{stat.st_mtime}|{stat.st_size}".encode("utf-8")
+                    f"{path.resolve()}|{stat.st_mtime}|{stat.st_size}".encode()
                 ).hexdigest(),
                 corpus_ref=str(path.resolve()),
             )
@@ -213,10 +213,7 @@ class FolderAdapter:
     def _walk(self) -> Iterator[Path]:
         for root in self.roots:
             patterns = self._ignore_patterns.get(root, [])
-            if self.recursive:
-                candidates = root.rglob("*")
-            else:
-                candidates = root.glob("*")
+            candidates = root.rglob("*") if self.recursive else root.glob("*")
             for p in candidates:
                 if not p.is_file():
                     continue
