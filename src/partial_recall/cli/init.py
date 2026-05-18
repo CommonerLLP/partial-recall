@@ -57,10 +57,10 @@ PROVIDER_PROFILES: tuple[ProviderProfile, ...] = (
     ),
     ProviderProfile(
         label="Highest quality, willing to use Google Cloud (paid)",
-        description="Gemini API, requires internet + Google Cloud account [coming in v0.1.0]",
+        description="Gemini API, requires internet + Google Cloud account "
+        "(set PARTIAL_RECALL_GEMINI_API_KEY)",
         provider="gemini",
         model="gemini-embedding-001",
-        enabled=False,
     ),
     ProviderProfile(
         label="I want to pick a specific model (advanced)",
@@ -159,7 +159,7 @@ def _ask_provider_profile() -> ProviderProfile:
         prof = PROVIDER_PROFILES[choice - 1]
         if not prof.enabled:
             console.print(
-                f"[yellow]Option {choice} is not yet available in v0.0.1. "
+                f"[yellow]Option {choice} is not yet available. "
                 "Please pick another.[/yellow]"
             )
             continue
