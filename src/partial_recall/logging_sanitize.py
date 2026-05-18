@@ -1,13 +1,18 @@
 """Log-sanitization processor.
 
-structlog processor that strips two classes of secret/PII from log
+structlog processor that strips three classes of secret/PII from log
 records before they hit any renderer:
 
   1. **Sensitive field VALUES** — any key whose name matches a sensitive
      pattern (api_key, token, secret, password, authorization, etc.).
      Value is replaced with ``"***"`` regardless of type/length.
 
-  2. **Absolute filesystem paths** — any string field containing an
+  2. **Sensitive value SHAPES** — even if the field name is innocent,
+     values that look like an API key / token / JWT / PEM private key
+     are redacted in-place. Defence-in-depth: a developer who logs an
+     API key in a field called ``extra_context`` shouldn't ship it.
+
+  3. **Absolute filesystem paths** — any string field containing an
      absolute POSIX or Windows path is normalised: home directory →
      ``~``; system paths kept as-is (those don't leak who the user is).
 
@@ -79,6 +84,39 @@ _HOME_DIR_RE = re.compile(
 )
 
 
+# Value-shape patterns: redact even when the field name itself isn't
+# sensitive. Defence-in-depth — a developer who logs an API key in a
+# field called "wow_look_at_this" still shouldn't ship it.
+#
+# Each entry is (compiled_regex, label_for_debug). Patterns are
+# deliberately strict so they don't accidentally redact innocent
+# alphanumeric strings.
+_VALUE_SHAPE_PATTERNS = [
+    # Gemini / Google Cloud API keys: AIzaSy + 33 chars (39 total).
+    (re.compile(r"AIzaSy[A-Za-z0-9_\-]{30,}"), "gemini-api-key"),
+    # GitHub fine-grained / classic tokens: ghp_, gho_, ghu_, ghs_, ghr_.
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"), "github-token"),
+    # OpenAI keys: sk-…  (legacy + new sk-proj- shapes; conservative ≥20 chars).
+    (re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{20,}\b"), "openai-key"),
+    # Generic bearer JWTs (eyJ… three dot-separated base64-url chunks).
+    (re.compile(
+        r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b"
+    ), "jwt"),
+    # PEM-wrapped private keys (catch the header; anything after is collateral).
+    (re.compile(r"-----BEGIN[ A-Z]*PRIVATE KEY-----[\s\S]*?-----END[ A-Z]*PRIVATE KEY-----"),
+     "pem-private-key"),
+    # Bare PEM header (e.g. truncated value, common in logs).
+    (re.compile(r"-----BEGIN[ A-Z]*PRIVATE KEY-----"), "pem-private-key-header"),
+]
+
+
+def _redact_value_shapes(value: str) -> str:
+    """Redact substrings that look like a secret regardless of field name."""
+    for pattern, _label in _VALUE_SHAPE_PATTERNS:
+        value = pattern.sub(_REDACTED, value)
+    return value
+
+
 def _redact_home_paths(value: str) -> str:
     """Replace any /Users/<user> or /home/<user> prefix with ~."""
     return _HOME_DIR_RE.sub("~", value)
@@ -103,7 +141,11 @@ def sanitize_event_dict(
             event_dict[key] = _REDACTED
             continue
         if isinstance(value, str):
-            event_dict[key] = _redact_home_paths(value)
+            # Order matters: catch the secret-shape FIRST (it may be
+            # embedded in a longer string), then normalise home paths.
+            cleaned = _redact_value_shapes(value)
+            cleaned = _redact_home_paths(cleaned)
+            event_dict[key] = cleaned
         elif isinstance(value, os.PathLike):
             event_dict[key] = _redact_home_paths(os.fspath(value))
     return event_dict

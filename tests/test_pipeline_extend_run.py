@@ -32,7 +32,6 @@ from partial_recall.index.pipeline import (
 )
 from partial_recall.store.vector_store import VectorStore
 
-
 # ---------------------------------------------------------------------------
 # Provider + adapter doubles
 # ---------------------------------------------------------------------------

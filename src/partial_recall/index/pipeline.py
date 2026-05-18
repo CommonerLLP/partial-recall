@@ -16,6 +16,7 @@ already-vectorised chunks are skipped without re-embedding.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from collections.abc import Callable
@@ -29,7 +30,6 @@ from partial_recall.corpus.protocol import CorpusAdapter
 from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.store.vector_store import VectorStore
-
 
 # A progress callback receives: the current item, its 1-based index, and
 # the total (None if the adapter can't say). Implementations should be
@@ -195,10 +195,9 @@ def run_indexing(
     for item in adapter.list_items():
         item_count += 1
         if on_item_start is not None:
-            try:
+            # Progress UI must never crash indexing.
+            with contextlib.suppress(Exception):
                 on_item_start(item, item_count, total_items)
-            except Exception:  # noqa: BLE001 — progress UI must never crash indexing
-                pass
         # Upsert item metadata
         store.upsert_item(
             item_key=item.item_key,

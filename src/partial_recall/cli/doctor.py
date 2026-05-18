@@ -332,7 +332,8 @@ def _check_pth_uf_hidden() -> CheckResult:
             message="UF_HIDDEN check only applies to macOS.",
         )
     # Find the active venv's site-packages by walking sys.prefix.
-    site_packages = Path(sys.prefix) / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+    py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    site_packages = Path(sys.prefix) / "lib" / py_ver / "site-packages"
     if not site_packages.exists():
         return CheckResult(
             name="pth_uf_hidden",
