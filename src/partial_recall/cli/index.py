@@ -18,6 +18,7 @@ from rich.progress import (
 
 from partial_recall.config.loader import load_config
 from partial_recall.config.models import EmbeddingProviderName
+from partial_recall.corpus.adapters.folder import FolderAdapter
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
@@ -65,7 +66,7 @@ def index_command(
     source: str = typer.Option(  # noqa: B008
         "zotero",
         "--source",
-        help="Which corpus adapter to use. v0.0.1: only 'zotero'.",
+        help="Which corpus adapter to use: 'zotero' or 'folder'.",
     ),
     extend: bool = typer.Option(  # noqa: B008
         False,
@@ -109,20 +110,32 @@ def index_command(
         )
     cfg = load_config(cfg_path)
 
-    if source != "zotero":
+    if source not in {"zotero", "folder"}:
         raise PartialRecallError(
-            f"Source '{source}' not supported in v0.0.1 (only 'zotero')."
+            f"Source {source!r} not supported. Use 'zotero' or 'folder'."
         )
-    if not cfg.zotero.enabled:
-        raise PartialRecallError(
-            "Zotero source is disabled in config. "
-            "Set [zotero] enabled = true and re-run."
-        )
-    if not cfg.zotero.sqlite_path.exists():
-        raise CorpusUnavailableError(
-            f"Zotero DB not found at {cfg.zotero.sqlite_path}. "
-            "Check your config or re-run `partial-recall init`."
-        )
+    if source == "zotero":
+        if not cfg.zotero.enabled:
+            raise PartialRecallError(
+                "Zotero source is disabled in config. "
+                "Set [zotero] enabled = true and re-run."
+            )
+        if not cfg.zotero.sqlite_path.exists():
+            raise CorpusUnavailableError(
+                f"Zotero DB not found at {cfg.zotero.sqlite_path}. "
+                "Check your config or re-run `partial-recall init`."
+            )
+    else:  # folder
+        if not cfg.folder.enabled:
+            raise PartialRecallError(
+                "Folder source is disabled in config. "
+                "Set [folder] enabled = true and configure [folder] paths = [...]."
+            )
+        if not cfg.folder.paths:
+            raise PartialRecallError(
+                "Folder source has no paths configured. "
+                "Set [folder] paths = ['/path/to/your/library/']."
+            )
 
     console.print(
         f"[bold]Loading embedding provider:[/bold] "
@@ -141,11 +154,23 @@ def index_command(
         provider = _build_provider(cfg.embedding.provider, cfg.embedding.model)
         progress.remove_task(load_task)
 
-    console.print(f"[bold]Opening Zotero:[/bold] {cfg.zotero.sqlite_path}")
-    adapter = ZoteroAdapter(
-        sqlite_path=cfg.zotero.sqlite_path,
-        storage_path=cfg.zotero.storage_path,
-    )
+    adapter: ZoteroAdapter | FolderAdapter
+    if source == "zotero":
+        console.print(f"[bold]Opening Zotero:[/bold] {cfg.zotero.sqlite_path}")
+        adapter = ZoteroAdapter(
+            sqlite_path=cfg.zotero.sqlite_path,
+            storage_path=cfg.zotero.storage_path,
+        )
+    else:
+        console.print(
+            f"[bold]Walking folder corpus:[/bold] "
+            + ", ".join(str(p) for p in cfg.folder.paths)
+        )
+        adapter = FolderAdapter(
+            roots=cfg.folder.paths,
+            recursive=cfg.folder.recursive,
+            extensions=frozenset(ext.lower() for ext in cfg.folder.extensions),
+        )
     console.print(f"[bold]Opening vector store:[/bold] {cfg.index.vector_db_path}")
     store = VectorStore(cfg.index.vector_db_path)
 
