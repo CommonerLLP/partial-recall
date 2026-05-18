@@ -12,6 +12,7 @@ from typing import Annotated
 import typer
 
 from partial_recall import __version__
+from partial_recall.cli.doctor import doctor_command
 from partial_recall.cli.import_cookjohn import import_app
 from partial_recall.cli.index import index_command
 from partial_recall.cli.init import init_command
@@ -36,6 +37,10 @@ app.command(name="index", help="Build / update the vector index.")(index_command
 app.command(name="status", help="Show index status.")(status_command)
 app.command(name="search", help="Run a semantic search.")(search_command)
 app.command(name="serve", help="Start the MCP server over stdio.")(serve_command)
+app.command(
+    name="doctor",
+    help="Run diagnostic checks — surfaces config / corpus / install issues.",
+)(doctor_command)
 app.add_typer(import_app, name="import")
 
 
