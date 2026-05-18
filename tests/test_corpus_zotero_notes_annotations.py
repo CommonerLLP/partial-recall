@@ -14,7 +14,6 @@ import pytest
 
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter, _strip_html
 
-
 # ---------------------------------------------------------------------------
 # Builders
 # ---------------------------------------------------------------------------
@@ -225,7 +224,9 @@ def test_get_note_text_strips_html_and_prepends_title(adapter: ZoteroAdapter) ->
     assert text is not None
     assert text.startswith("Chapter overview")
     assert "Reading was always political" in text
-    assert "<" not in text and ">" not in text  # tags fully stripped
+    # tags fully stripped
+    assert "<" not in text
+    assert ">" not in text
 
 
 def test_get_annotation_text_combines_text_comment_page(adapter: ZoteroAdapter) -> None:

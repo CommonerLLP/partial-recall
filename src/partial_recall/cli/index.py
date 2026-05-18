@@ -163,7 +163,7 @@ def index_command(
         )
     else:
         console.print(
-            f"[bold]Walking folder corpus:[/bold] "
+            "[bold]Walking folder corpus:[/bold] "
             + ", ".join(str(p) for p in cfg.folder.paths)
         )
         adapter = FolderAdapter(

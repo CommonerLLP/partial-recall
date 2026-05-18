@@ -11,6 +11,90 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: marks tests that download models or otherwise take >1s"
     )
+    config.addinivalue_line(
+        "markers",
+        "live: marks tests that hit a real external API (Gemini, etc.). "
+        "Skipped by default; opt in with `pytest --run-live`. Use only to "
+        "RECORD new vcrpy cassettes — never in CI.",
+    )
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-live",
+        action="store_true",
+        default=False,
+        help="Run @pytest.mark.live tests (real external API calls). "
+             "Use only to record new cassettes — never in CI.",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip @pytest.mark.live tests unless --run-live is given."""
+    if config.getoption("--run-live"):
+        return
+    skip_live = pytest.mark.skip(
+        reason="skipped — pass --run-live to hit real external APIs"
+    )
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip_live)
+
+
+# ---------------------------------------------------------------------------
+# vcrpy / pytest-recording configuration
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _skip_vcr_if_cassette_missing(request: pytest.FixtureRequest) -> None:
+    """Auto-skip @pytest.mark.vcr tests when no cassette file exists.
+
+    Without this, CI would either (a) error on every cassette test
+    until cassettes are recorded, or (b) skip them permanently behind
+    a `live` marker — meaning cassette drift would never be detected
+    in CI. With this auto-skip, the moment a cassette lands in
+    tests/fixtures/cassettes/, CI starts replaying it and catches
+    drift; until then, the test stays quietly skipped with a clear
+    reason. Resolves chatgpt-codex-connector review on PR #5.
+    """
+    if not request.node.get_closest_marker("vcr"):
+        return
+    cassette_dir = Path(__file__).parent / "fixtures" / "cassettes"
+    candidate = cassette_dir / f"{request.node.name}.yaml"
+    if not candidate.exists():
+        pytest.skip(
+            f"cassette not yet recorded: {candidate.name} — see "
+            "tests/fixtures/cassettes/README.md for the recording protocol"
+        )
+
+
+@pytest.fixture(scope="module")
+def vcr_config() -> dict:
+    """pytest-recording configuration.
+
+    * cassettes live under tests/fixtures/cassettes/ (one file per test)
+    * any `key=` query parameter is scrubbed before write (Gemini puts
+      the API key in the URL)
+    * Authorization / x-goog-api-key headers are scrubbed
+    * request matching does NOT use the key (so cassettes replay even
+      when no key is set)
+    * default record_mode='none' → CI never records and never makes
+      live calls; recording is opt-in via `--record-mode=once`.
+    """
+    return {
+        "cassette_library_dir": str(
+            Path(__file__).parent / "fixtures" / "cassettes"
+        ),
+        "filter_query_parameters": [("key", "REDACTED")],
+        "filter_headers": [
+            ("authorization", "REDACTED"),
+            ("x-goog-api-key", "REDACTED"),
+            ("cookie", "REDACTED"),
+        ],
+        "match_on": ["method", "scheme", "host", "port", "path"],
+        "record_mode": "none",
+    }
 
 
 @pytest.fixture

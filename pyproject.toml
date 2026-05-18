@@ -1,6 +1,6 @@
 [project]
 name = "partial-recall"
-version = "0.2.0"
+version = "0.2.1"
 description = "Semantic memory for your scholarly corpus. Multilingual, offline-first, free."
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
@@ -39,6 +39,9 @@ dependencies = [
     "platformdirs>=4.2.0",
     "structlog>=24.1.0",
     "pypdf>=4.0.0",
+    # numpy is used by core (embedding/quantize.py packs int8 vectors;
+    # search ranks via numpy ops). It's not optional.
+    "numpy>=1.26.0",
 ]
 
 [project.optional-dependencies]
@@ -65,6 +68,10 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "hypothesis>=6.100.0",
+    # Cassettes for external HTTP — record once with a real Gemini key,
+    # commit the redacted cassette; CI replays without ever calling out.
+    "vcrpy>=6.0.0",
+    "pytest-recording>=0.13.0",
 ]
 
 [project.scripts]
