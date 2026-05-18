@@ -56,7 +56,6 @@ def _provider() -> GeminiAPIProvider:
     return GeminiAPIProvider(api_key=key or "REPLAY-PLACEHOLDER")
 
 
-@pytest.mark.live
 @pytest.mark.vcr
 def test_gemini_embed_single_document() -> None:
     """Embedding one short document returns a single dim=3072 int8 vector."""
@@ -73,7 +72,6 @@ def test_gemini_embed_single_document() -> None:
     assert len(batch.vectors[0]) == 3072
 
 
-@pytest.mark.live
 @pytest.mark.vcr
 def test_gemini_embed_batch_of_three() -> None:
     """Batching: three inputs → three vectors, order preserved."""
@@ -95,7 +93,6 @@ def test_gemini_embed_batch_of_three() -> None:
         assert len(v) == 3072
 
 
-@pytest.mark.live
 @pytest.mark.vcr
 def test_gemini_query_task_type() -> None:
     """A query-task embedding still returns a single 3072-int8 vector."""

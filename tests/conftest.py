@@ -46,6 +46,29 @@ def pytest_collection_modifyitems(config, items):
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _skip_vcr_if_cassette_missing(request: pytest.FixtureRequest) -> None:
+    """Auto-skip @pytest.mark.vcr tests when no cassette file exists.
+
+    Without this, CI would either (a) error on every cassette test
+    until cassettes are recorded, or (b) skip them permanently behind
+    a `live` marker — meaning cassette drift would never be detected
+    in CI. With this auto-skip, the moment a cassette lands in
+    tests/fixtures/cassettes/, CI starts replaying it and catches
+    drift; until then, the test stays quietly skipped with a clear
+    reason. Resolves chatgpt-codex-connector review on PR #5.
+    """
+    if not request.node.get_closest_marker("vcr"):
+        return
+    cassette_dir = Path(__file__).parent / "fixtures" / "cassettes"
+    candidate = cassette_dir / f"{request.node.name}.yaml"
+    if not candidate.exists():
+        pytest.skip(
+            f"cassette not yet recorded: {candidate.name} — see "
+            "tests/fixtures/cassettes/README.md for the recording protocol"
+        )
+
+
 @pytest.fixture(scope="module")
 def vcr_config() -> dict:
     """pytest-recording configuration.
@@ -57,7 +80,7 @@ def vcr_config() -> dict:
     * request matching does NOT use the key (so cassettes replay even
       when no key is set)
     * default record_mode='none' → CI never records and never makes
-      live calls; recording is opt-in via `--record-mode=once --run-live`.
+      live calls; recording is opt-in via `--record-mode=once`.
     """
     return {
         "cassette_library_dir": str(
