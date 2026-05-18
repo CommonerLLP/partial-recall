@@ -113,13 +113,14 @@ class _InterruptingAdapter(_Adapter):
         self._interrupt_after = interrupt_after
 
     def list_items(self, since=None) -> Iterator[Item]:
-        import os
         for idx, item in enumerate(self._items):
             yield item
             if idx + 1 == self._interrupt_after:
-                # Send SIGINT to self; the pipeline's handler should
-                # catch it and request a clean stop.
-                os.kill(os.getpid(), signal.SIGINT)
+                # In-process signal delivery — works on both POSIX and
+                # Windows. (os.kill(pid, SIGINT) is unreliable on
+                # Windows, where it can terminate the process instead
+                # of invoking the registered handler.)
+                signal.raise_signal(signal.SIGINT)
 
 
 # ---------------------------------------------------------------------------
