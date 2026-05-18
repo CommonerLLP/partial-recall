@@ -5,8 +5,10 @@ Uses Typer's CliRunner with stdin input simulation.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from partial_recall.cli.app import app
@@ -60,12 +62,22 @@ def test_init_aborts_if_existing_config_and_no_force(tmp_path: Path) -> None:
     assert cfg_path.read_text(encoding="utf-8") == "existing"
 
 
-def test_init_disabled_profile_re_prompts(tmp_path: Path) -> None:
-    """If user picks option 3 (Gemini — disabled in v0.0.1), wizard re-prompts."""
+def test_init_disabled_profile_re_prompts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If user picks a disabled profile, wizard re-prompts and accepts the next pick."""
+    from partial_recall.cli import init as init_mod
+
+    patched = tuple(
+        replace(p, enabled=False) if i == 2 else p
+        for i, p in enumerate(init_mod.PROVIDER_PROFILES)
+    )
+    monkeypatch.setattr(init_mod, "PROVIDER_PROFILES", patched)
+
     cfg_path = tmp_path / "config.toml"
     stdin = "\n".join(
         [
-            "3",  # disabled profile
+            "3",  # disabled profile (patched)
             "1",  # fallback to option 1
             "",  # default vector DB
             "n",  # use default Zotero? no
