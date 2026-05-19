@@ -10,7 +10,43 @@ This is **a localized tool that scholars customise to fit their own corpora**. I
 
 ## Status
 
-**v0.1.0 — first stable public release.** Tested so far on Apple Silicon Mac (macOS, 16 GB RAM). Lower-spec hardware should work — the default ONNX provider is CPU-only — but has not yet been verified. Linux and Windows are roadmap items. See [ROADMAP.md](./ROADMAP.md).
+**v0.2.3 — actively developed.** Released minors so far: v0.0.9, v0.1.0,
+v0.2.0, v0.2.1, v0.2.2, v0.2.3. See [ROADMAP.md](./ROADMAP.md) for the
+slice-by-slice plan to v0.3.0 and beyond.
+
+### Where it's tested today
+
+- **Primary dev machine:** Apple Silicon M1 (2020), 8 GB RAM, macOS.
+- **CI matrix** (since v0.2.1): macOS-14, Ubuntu-22.04, Windows-2022
+  × Python 3.11, 3.12. Every push to `main` and every PR runs the
+  full test suite against all six cells.
+
+### Where it's *designed* to run
+
+The target audience is humanities and social-science scholars in
+emerging markets — bahujan / Dalit, African, Indigenous-language,
+working-class independent scholars — on the laptops they actually
+own. That means the design target is:
+
+- **4–8 GB RAM** is the baseline. 4 GB Intel i3/i5/i7, AMD Ryzen 3/5,
+  and Apple Silicon all in scope. The default ONNX provider is
+  CPU-only and the default model (`multilingual-e5-small` quantized
+  to int8) is ~310 MB for a 15K-item corpus.
+- **Linux / macOS first.** Unix is the design baseline.
+- **Windows committed.** Many students are on Windows machines they
+  did not choose; cross-platform CI lands Windows support as a
+  first-class concern, not an afterthought.
+
+### Where it's NOT designed to run
+
+- **Chromebooks** — most are too RAM-constrained or locked-down to
+  carry the ONNX model + a Python install. If you have a Chromebook
+  with a Linux dev environment + 8 GB RAM you can try; this is not
+  a supported path.
+- **Phones / tablets** — not in scope. Mobile HTTP-client access to
+  a self-hosted partial-recall is on the v0.x roadmap (the HTTP
+  transport stub lands in v0.2.4).
+- **GPU-only / CUDA-required** — never. CPU-only is the floor.
 
 ## Stance
 
@@ -26,7 +62,8 @@ What it **is not**:
 
 - Not a Mendeley / EndNote / Paperpile / DEVONthink / Notion plugin. These are closed formats; supporting them is not a roadmap item.
 - Not a SaaS product. No cloud account. No telemetry, ever.
-- Not cross-platform yet. v0.0.1 is macOS-tested. Linux + Windows ship with v0.1.0.
+- Not designed for GPU-only environments. CPU-only is the floor; CPU is the design target.
+- Not supported on Chromebooks. Most are too RAM-constrained or locked-down to run the ONNX model + a full Python install.
 
 ## Install
 
