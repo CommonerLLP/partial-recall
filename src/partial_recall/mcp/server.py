@@ -19,9 +19,17 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from partial_recall.embedding.protocol import EmbeddingProvider
+from partial_recall.mcp.tools.get_item_details import (
+    GET_ITEM_DETAILS_TOOL,
+    handle_get_item_details,
+)
 from partial_recall.mcp.tools.semantic_search import (
     SEMANTIC_SEARCH_TOOL,
     handle_semantic_search,
+)
+from partial_recall.mcp.tools.semantic_status import (
+    SEMANTIC_STATUS_TOOL,
+    handle_semantic_status,
 )
 from partial_recall.store.vector_store import VectorStore
 
@@ -40,16 +48,21 @@ def build_server(
 
     @server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
     async def _list_tools() -> list[Tool]:
-        return [SEMANTIC_SEARCH_TOOL]
+        return [
+            SEMANTIC_SEARCH_TOOL,
+            SEMANTIC_STATUS_TOOL,
+            GET_ITEM_DETAILS_TOOL,
+        ]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
     async def _call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        args = arguments or {}
         if name == SEMANTIC_SEARCH_TOOL.name:
-            return await handle_semantic_search(
-                arguments or {},
-                store=store,
-                provider=provider,
-            )
+            return await handle_semantic_search(args, store=store, provider=provider)
+        if name == SEMANTIC_STATUS_TOOL.name:
+            return await handle_semantic_status(args, store=store)
+        if name == GET_ITEM_DETAILS_TOOL.name:
+            return await handle_get_item_details(args, store=store)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
         return [TextContent(
