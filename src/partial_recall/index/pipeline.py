@@ -279,6 +279,10 @@ def run_indexing(
             metadata_hash=item.metadata_hash,
             last_indexed_at=_now_iso(),
             corpus_ref=item.corpus_ref,
+            archive=item.archive,
+            archive_location=item.archive_location,
+            call_number=item.call_number,
+            library_catalog=item.library_catalog,
         )
         # For each source: extract → chunk → record
         for source in adapter.get_sources(item):

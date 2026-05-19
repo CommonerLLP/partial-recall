@@ -23,6 +23,10 @@ from partial_recall.mcp.tools.get_item_details import (
     GET_ITEM_DETAILS_TOOL,
     handle_get_item_details,
 )
+from partial_recall.mcp.tools.list_collections import (
+    LIST_COLLECTIONS_TOOL,
+    handle_list_collections,
+)
 from partial_recall.mcp.tools.search_fulltext import (
     SEARCH_FULLTEXT_TOOL,
     handle_search_fulltext,
@@ -57,6 +61,7 @@ def build_server(
             SEARCH_FULLTEXT_TOOL,
             SEMANTIC_STATUS_TOOL,
             GET_ITEM_DETAILS_TOOL,
+            LIST_COLLECTIONS_TOOL,
         ]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
@@ -70,6 +75,8 @@ def build_server(
             return await handle_semantic_status(args, store=store)
         if name == GET_ITEM_DETAILS_TOOL.name:
             return await handle_get_item_details(args, store=store)
+        if name == LIST_COLLECTIONS_TOOL.name:
+            return await handle_list_collections(args, store=store)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
         return [TextContent(

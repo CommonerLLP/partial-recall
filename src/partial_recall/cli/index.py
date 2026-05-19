@@ -42,6 +42,41 @@ def _truncate_title(title: str | None, fallback: str, width: int = 60) -> str:
 console = Console()
 
 
+def _sync_zotero_collections(
+    adapter: ZoteroAdapter, store: VectorStore
+) -> None:
+    """Mirror Zotero's collections + memberships into our store.
+
+    Cheap to re-run on every `index`; gives the MCP `list_collections`
+    tool + the `get_item_details` collection-list a fresh snapshot.
+    """
+    from datetime import UTC, datetime
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    collection_count = 0
+    for collection in adapter.list_zotero_collections():
+        store.upsert_collection(
+            corpus="zotero",
+            collection_key=collection["collection_key"],
+            name=collection["name"],
+            parent_key=collection.get("parent_key"),
+            last_indexed_at=now,
+        )
+        collection_count += 1
+
+    membership_count = 0
+    for edge in adapter.list_collection_memberships():
+        store.link_item_to_collection(
+            corpus="zotero",
+            item_key=edge["item_key"],
+            collection_key=edge["collection_key"],
+        )
+        membership_count += 1
+    console.print(
+        f"[bold]Collections:[/bold] synced {collection_count} collection(s) "
+        f"and {membership_count} item-in-collection edge(s)."
+    )
+
+
 def _build_provider(
     provider_name: EmbeddingProviderName, model: str
 ) -> EmbeddingProvider:
@@ -173,6 +208,11 @@ def index_command(
         )
     console.print(f"[bold]Opening vector store:[/bold] {cfg.index.vector_db_path}")
     store = VectorStore(cfg.index.vector_db_path)
+
+    # Sync collections + membership for Zotero (v0.2.4 richness).
+    # Folder corpus does not have a collections concept.
+    if source == "zotero":
+        _sync_zotero_collections(adapter, store)
 
     # Resolve extend target (CLI flag → explicit run → active run).
     target_run_id: int | None = None
