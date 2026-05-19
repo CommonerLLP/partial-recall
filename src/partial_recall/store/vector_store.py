@@ -317,6 +317,20 @@ class VectorStore:
             (corpus, collection_key, name, parent_key, last_indexed_at),
         )
 
+    def clear_collection_memberships(self, corpus: str) -> int:
+        """Remove ALL item↔collection rows for `corpus`.
+
+        Used at the top of a collection-sync pass so stale memberships
+        (items removed from collections in Zotero between runs, or
+        whole collections deleted) don't linger. Returns the row count
+        removed. Codex P2 review on PR #13.
+        """
+        cur = self._conn.execute(
+            "DELETE FROM item_collections WHERE owner = 'local' AND corpus = ?",
+            (corpus,),
+        )
+        return cur.rowcount or 0
+
     def link_item_to_collection(
         self,
         *,

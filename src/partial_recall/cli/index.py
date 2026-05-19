@@ -63,8 +63,21 @@ def _sync_zotero_collections(
         )
         collection_count += 1
 
+    # Wipe stale memberships before re-inserting (codex P2 review on
+    # PR #13). The collections + item_collections tables become an
+    # authoritative mirror of what Zotero currently says — an item
+    # removed from a collection (or a deleted collection) doesn't
+    # linger.
+    cleared = store.clear_collection_memberships("zotero")
+
     membership_count = 0
     for edge in adapter.list_collection_memberships():
+        # Skip edges whose item_key was not upserted in this run (e.g.
+        # an attachment or note that the adapter's list_items filter
+        # excludes). Without this guard the FK insert would fail.
+        # We check by looking up items table for the (corpus, item_key).
+        if not _item_exists(store, "zotero", edge["item_key"]):
+            continue
         store.link_item_to_collection(
             corpus="zotero",
             item_key=edge["item_key"],
@@ -72,9 +85,17 @@ def _sync_zotero_collections(
         )
         membership_count += 1
     console.print(
-        f"[bold]Collections:[/bold] synced {collection_count} collection(s) "
-        f"and {membership_count} item-in-collection edge(s)."
+        f"[bold]Collections:[/bold] synced {collection_count} collection(s); "
+        f"cleared {cleared} stale memberships; wrote {membership_count} fresh edge(s)."
     )
+
+
+def _item_exists(store: VectorStore, corpus: str, item_key: str) -> bool:
+    row = store._conn.execute(
+        "SELECT 1 FROM items WHERE owner = 'local' AND corpus = ? AND item_key = ? LIMIT 1",
+        (corpus, item_key),
+    ).fetchone()
+    return row is not None
 
 
 def _build_provider(
@@ -209,10 +230,9 @@ def index_command(
     console.print(f"[bold]Opening vector store:[/bold] {cfg.index.vector_db_path}")
     store = VectorStore(cfg.index.vector_db_path)
 
-    # Sync collections + membership for Zotero (v0.2.4 richness).
-    # Folder corpus does not have a collections concept.
-    if source == "zotero":
-        _sync_zotero_collections(adapter, store)
+    # (Zotero collections sync now happens AFTER run_indexing — items
+    # must exist in the items table before item_collections rows can
+    # FK-link to them. Caught by codex P1 review on PR #13.)
 
     # Resolve extend target (CLI flag → explicit run → active run).
     target_run_id: int | None = None
@@ -351,4 +371,11 @@ def index_command(
             f"[bold]{result.new_vector_count}[/bold] new vectors "
             f"(run_id={result.run_id})"
         )
+
+    # Sync collections + memberships AFTER run_indexing so items already
+    # exist in the items table (FK target for item_collections).
+    # Folder corpus does not have a collections concept.
+    if source == "zotero":
+        _sync_zotero_collections(adapter, store)
+
     store.close()
