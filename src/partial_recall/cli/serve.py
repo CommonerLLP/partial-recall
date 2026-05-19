@@ -29,7 +29,7 @@ console = Console(stderr=True)
 
 
 def _build_provider(
-    provider_name: EmbeddingProviderName, model: str
+    provider_name: EmbeddingProviderName, model: str, device: str = "auto"
 ) -> EmbeddingProvider:
     if provider_name == "local-onnx":
         from partial_recall.embedding.providers.local_onnx import LocalONNXProvider
@@ -39,6 +39,12 @@ def _build_provider(
         from partial_recall.embedding.providers.gemini import GeminiAPIProvider
 
         return GeminiAPIProvider(model_name=model)
+    if provider_name == "sentence-transformer":
+        from partial_recall.embedding.providers.sentence_transformer import (
+            SentenceTransformerProvider,
+        )
+
+        return SentenceTransformerProvider(model_name=model, device=device)
     raise PartialRecallError(f"Unknown embedding provider: {provider_name}")
 
 
@@ -72,7 +78,9 @@ def serve_command(
         f"[dim]partial-recall serve — loading provider "
         f"({cfg.embedding.provider}: {cfg.embedding.model})...[/dim]"
     )
-    provider = _build_provider(cfg.embedding.provider, cfg.embedding.model)
+    provider = _build_provider(
+        cfg.embedding.provider, cfg.embedding.model, cfg.embedding.device
+    )
     store = VectorStore(cfg.index.vector_db_path)
     active = store.get_active_run()
     if active is None:

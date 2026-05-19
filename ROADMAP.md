@@ -197,16 +197,27 @@ Next meaningful version bump. Candidate scope:
 
 ## v0.3.0 — Round out the text-corpus story
 
-- [ ] `ObsidianAdapter` (markdown files folder; link-aware; respects `.obsidian/` excludes)
-- [ ] `JabRefAdapter` (open-source reference manager; BibTeX-rooted)
-- [ ] `CalibreAdapter` (open-source e-book library)
-- [ ] More embedding providers: Voyage-3, OpenAI text-embedding-3-small, BGE-M3 base, IndicBERT v2, MuRIL, LaBSE
-- [ ] Locale-aware embedding routing (Tamil chunks → Tamil-strong embedder; Persian → Persian-strong)
-- [ ] i18n shipping: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese
-- [ ] Better chunking: semantic-aware via `blingfire` or `spaCy`; tokenizer-aware for CJK
-- [ ] Snapshot / web indexing (Zotero webpage captures)
-- [ ] Optional Zotero plugin (triggers indexing from Zotero UI)
-- [ ] `partial-recall doctor --fix` (opt-in automatic fixes for safe issues)
+**Status: SHIPPED**
+
+- [x] `MarkdownNotesAdapter` (markdown notes folders — Obsidian, The Archive, Zettlr; respects `.partial-recallignore`; parses YAML frontmatter)
+- [x] `JabRefAdapter` (JabRef / BibTeX bibliography files; indexes abstracts + linked PDFs)
+- [x] `CalibreAdapter` (Calibre e-book library via `metadata.db`; no Calibre install required; EPUB + PDF + TXT)
+- [x] EPUB extractor (stdlib zip + html.parser; no ebooklib dep)
+- [x] DOCX extractor (stdlib zip + xml.etree; no python-docx dep; for humanities scholars using Word)
+- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE (109 languages, Tamil/Urdu/Bengali/Malayalam), BGE-M3 (100+ languages, highest quality); auto CUDA/MPS/CPU detection
+- [x] Hardware-aware, language-aware init wizard — detects RAM + chip, surveys corpus languages, shows ranked model ladder with provenance (maintainer, HQ country, open-weights, license, documented military contracts, data sovereignty)
+- [x] Pre-release liability disclaimer in init wizard and README
+- [x] `[embedding] device = "auto"` config field (CUDA → MPS → CPU auto-detection)
+- [x] `[multilingual]` pip extra (`sentence-transformers`)
+- [x] Fix: Zotero collection sync used closed adapter connection
+- [x] `partial-recall doctor --fix` (iCloud UF_HIDDEN fix for .pth files)
+
+**Deferred to v0.4.0 or later:**
+- [/] Locale-aware embedding routing (Tamil chunks → Tamil-strong embedder; Persian → Persian-strong)
+- [/] i18n: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese interface strings
+- [/] Better chunking: semantic-aware via `blingfire` or `spaCy`; tokenizer-aware for CJK
+- [/] Snapshot / web indexing (Zotero webpage captures)
+- [/] Optional Zotero plugin (triggers indexing from Zotero UI)
 
 ## v0.4.0 — Multimodal scholarship
 

@@ -22,7 +22,6 @@ from rich.console import Console
 
 from partial_recall.errors import PartialRecallError
 from partial_recall.secrets import (
-    GEMINI_KEYRING_KEY,
     SERVICE_NAME,
     delete_gemini_api_key,
     get_gemini_api_key,
@@ -90,14 +89,26 @@ def set_gemini_command(
 ) -> None:
     """Store a Gemini API key in the OS keyring."""
     _require_keyring()
+    console.print(
+        "[dim]partial-recall will store your Gemini API key in your "
+        "system keychain (macOS Keychain / Linux Secret Service / "
+        "Windows Credential Manager). This keeps the key out of config "
+        "files and environment variables where it could leak.[/dim]"
+    )
+    console.print(
+        "[dim]If macOS shows a Keychain access dialog, that is "
+        "partial-recall — not Python — requesting permission to save "
+        "your key securely.[/dim]"
+    )
     if value is None:
-        value = typer.prompt("Gemini API key", hide_input=True).strip()
+        value = typer.prompt("Paste your Gemini API key", hide_input=True).strip()
     if not value:
         raise PartialRecallError("API key cannot be empty.")
     set_gemini_api_key(value)
     console.print(
-        f"[green]✓[/green] Stored Gemini API key in keyring "
-        f"(service={SERVICE_NAME}, key={GEMINI_KEYRING_KEY})."
+        "[green]✓[/green] Gemini API key saved to system keychain. "
+        "partial-recall will read it automatically from now on — no "
+        "environment variable needed."
     )
 
 

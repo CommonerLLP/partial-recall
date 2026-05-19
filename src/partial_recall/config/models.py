@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 # Known values — kept narrow in v0.0.1; expanded as providers/adapters are added.
-EmbeddingProviderName = Literal["local-onnx", "gemini"]
+EmbeddingProviderName = Literal["local-onnx", "gemini", "sentence-transformer"]
 QuantizationName = Literal["int8", "float16", "float32"]
 ServerTransport = Literal["stdio", "http"]
 ServerAuthMode = Literal["none", "token", "oauth"]
@@ -24,6 +24,7 @@ class EmbeddingConfig(BaseModel):
     quantization: QuantizationName = "int8"
     batch_size: int = Field(default=32, ge=1, le=512)
     max_input_tokens: int = Field(default=512, ge=64, le=8192)
+    device: str = "auto"  # "auto" | "cpu" | "cuda" | "mps"
 
 
 class IndexConfig(BaseModel):
@@ -55,6 +56,27 @@ class FolderConfig(BaseModel):
     )
 
 
+class MarkdownNotesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    notes_path: Path | None = None
+
+
+class JabRefConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    bib_path: Path | None = None
+
+
+class CalibreConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    library_path: Path | None = None
+
+
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -80,5 +102,8 @@ class PartialRecallConfig(BaseModel):
     index: IndexConfig
     zotero: ZoteroConfig
     folder: FolderConfig = Field(default_factory=FolderConfig)
+    markdown_notes: MarkdownNotesConfig = Field(default_factory=MarkdownNotesConfig)
+    jabref: JabRefConfig = Field(default_factory=JabRefConfig)
+    calibre: CalibreConfig = Field(default_factory=CalibreConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

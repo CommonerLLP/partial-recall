@@ -18,7 +18,10 @@ from rich.progress import (
 
 from partial_recall.config.loader import load_config
 from partial_recall.config.models import EmbeddingProviderName
+from partial_recall.corpus.adapters.calibre import CalibreAdapter
 from partial_recall.corpus.adapters.folder import FolderAdapter
+from partial_recall.corpus.adapters.jabref import JabRefAdapter
+from partial_recall.corpus.adapters.markdown_notes import MarkdownNotesAdapter
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
@@ -99,7 +102,7 @@ def _item_exists(store: VectorStore, corpus: str, item_key: str) -> bool:
 
 
 def _build_provider(
-    provider_name: EmbeddingProviderName, model: str
+    provider_name: EmbeddingProviderName, model: str, device: str = "auto"
 ) -> EmbeddingProvider:
     if provider_name == "local-onnx":
         # Lazy import — avoid loading ONNX deps unless local-onnx selected
@@ -110,6 +113,12 @@ def _build_provider(
         from partial_recall.embedding.providers.gemini import GeminiAPIProvider
 
         return GeminiAPIProvider(model_name=model)
+    if provider_name == "sentence-transformer":
+        from partial_recall.embedding.providers.sentence_transformer import (
+            SentenceTransformerProvider,
+        )
+
+        return SentenceTransformerProvider(model_name=model, device=device)
     raise PartialRecallError(f"Unknown embedding provider: {provider_name}")
 
 
@@ -122,7 +131,7 @@ def index_command(
     source: str = typer.Option(  # noqa: B008
         "zotero",
         "--source",
-        help="Which corpus adapter to use: 'zotero' or 'folder'.",
+        help="Corpus adapter: 'zotero', 'folder', 'markdown_notes', 'jabref', or 'calibre'.",
     ),
     extend: bool = typer.Option(  # noqa: B008
         False,
@@ -166,9 +175,10 @@ def index_command(
         )
     cfg = load_config(cfg_path)
 
-    if source not in {"zotero", "folder"}:
+    if source not in {"zotero", "folder", "markdown_notes", "jabref", "calibre"}:
         raise PartialRecallError(
-            f"Source {source!r} not supported. Use 'zotero' or 'folder'."
+            f"Source {source!r} not supported. "
+            "Use 'zotero', 'folder', 'markdown_notes', 'jabref', or 'calibre'."
         )
     if source == "zotero":
         if not cfg.zotero.enabled:
@@ -181,7 +191,7 @@ def index_command(
                 f"Zotero DB not found at {cfg.zotero.sqlite_path}. "
                 "Check your config or re-run `partial-recall init`."
             )
-    else:  # folder
+    elif source == "folder":
         if not cfg.folder.enabled:
             raise PartialRecallError(
                 "Folder source is disabled in config. "
@@ -191,6 +201,39 @@ def index_command(
             raise PartialRecallError(
                 "Folder source has no paths configured. "
                 "Set [folder] paths = ['/path/to/your/library/']."
+            )
+    elif source == "markdown_notes":
+        if not cfg.markdown_notes.enabled:
+            raise PartialRecallError(
+                "Markdown notes source is disabled in config. "
+                "Set [markdown_notes] enabled = true and notes_path = '/path/to/your/notes'."
+            )
+        if not cfg.markdown_notes.notes_path:
+            raise PartialRecallError(
+                "Markdown notes path not configured. "
+                "Set [markdown_notes] notes_path = '/path/to/your/notes'."
+            )
+    elif source == "jabref":
+        if not cfg.jabref.enabled:
+            raise PartialRecallError(
+                "JabRef source is disabled in config. "
+                "Set [jabref] enabled = true and bib_path = '/path/to/library.bib'."
+            )
+        if not cfg.jabref.bib_path:
+            raise PartialRecallError(
+                "JabRef bib_path not configured. "
+                "Set [jabref] bib_path = '/path/to/your/library.bib'."
+            )
+    else:  # calibre
+        if not cfg.calibre.enabled:
+            raise PartialRecallError(
+                "Calibre source is disabled in config. "
+                "Set [calibre] enabled = true and library_path = '/path/to/Calibre Library'."
+            )
+        if not cfg.calibre.library_path:
+            raise PartialRecallError(
+                "Calibre library_path not configured. "
+                "Set [calibre] library_path = '/path/to/your/Calibre Library'."
             )
 
     console.print(
@@ -207,17 +250,19 @@ def index_command(
         load_task = progress.add_task(
             "Loading ONNX model (first run downloads ~470 MB)...", total=None
         )
-        provider = _build_provider(cfg.embedding.provider, cfg.embedding.model)
+        provider = _build_provider(
+            cfg.embedding.provider, cfg.embedding.model, cfg.embedding.device
+        )
         progress.remove_task(load_task)
 
-    adapter: ZoteroAdapter | FolderAdapter
+    adapter: ZoteroAdapter | FolderAdapter | MarkdownNotesAdapter | JabRefAdapter | CalibreAdapter
     if source == "zotero":
         console.print(f"[bold]Opening Zotero:[/bold] {cfg.zotero.sqlite_path}")
         adapter = ZoteroAdapter(
             sqlite_path=cfg.zotero.sqlite_path,
             storage_path=cfg.zotero.storage_path,
         )
-    else:
+    elif source == "folder":
         console.print(
             "[bold]Walking folder corpus:[/bold] "
             + ", ".join(str(p) for p in cfg.folder.paths)
@@ -227,6 +272,17 @@ def index_command(
             recursive=cfg.folder.recursive,
             extensions=frozenset(ext.lower() for ext in cfg.folder.extensions),
         )
+    elif source == "markdown_notes":
+        console.print(
+            f"[bold]Walking markdown notes:[/bold] {cfg.markdown_notes.notes_path}"
+        )
+        adapter = MarkdownNotesAdapter(notes_path=cfg.markdown_notes.notes_path)
+    elif source == "jabref":
+        console.print(f"[bold]Opening JabRef library:[/bold] {cfg.jabref.bib_path}")
+        adapter = JabRefAdapter(bib_path=cfg.jabref.bib_path)
+    else:  # calibre
+        console.print(f"[bold]Opening Calibre library:[/bold] {cfg.calibre.library_path}")
+        adapter = CalibreAdapter(library_path=cfg.calibre.library_path)
     console.print(f"[bold]Opening vector store:[/bold] {cfg.index.vector_db_path}")
     store = VectorStore(cfg.index.vector_db_path)
 
@@ -317,6 +373,7 @@ def index_command(
     )
 
     result = None
+    pdf_noise = None
     try:
         with PypdfNoiseFilter() as pdf_noise, Progress(
             *progress_columns,
@@ -348,34 +405,35 @@ def index_command(
                 completed=result.item_count,
                 description="Finished",
             )
+
+        # Plain-English summary of any pypdf recovery noise.
+        if pdf_noise is not None and pdf_noise.total > 0:
+            console.print(f"\n[dim]{pdf_noise.human_summary()}[/dim]")
+
+        if result.extended:
+            console.print(
+                f"\n[green]✓[/green] Extended run_id={result.run_id}: "
+                f"walked [bold]{result.item_count}[/bold] items, "
+                f"added [bold]{result.chunk_count}[/bold] new chunks, "
+                f"embedded [bold]{result.new_vector_count}[/bold] new vectors, "
+                f"skipped [bold]{result.skipped_chunk_count}[/bold] already-vectorised"
+            )
+        else:
+            console.print(
+                f"\n[green]✓[/green] Indexed [bold]{result.item_count}[/bold] items, "
+                f"[bold]{result.chunk_count}[/bold] chunks, "
+                f"[bold]{result.new_vector_count}[/bold] new vectors "
+                f"(run_id={result.run_id})"
+            )
+
+        # Sync collections + memberships AFTER run_indexing so items already
+        # exist in the items table (FK target for item_collections).
+        # Folder corpus does not have a collections concept.
+        if source == "zotero":
+            _sync_zotero_collections(adapter, store)
+
     finally:
         adapter.close()
         provider.close()
-
-    # Plain-English summary of any pypdf recovery noise.
-    if pdf_noise.total > 0:
-        console.print(f"\n[dim]{pdf_noise.human_summary()}[/dim]")
-
-    if result.extended:
-        console.print(
-            f"\n[green]✓[/green] Extended run_id={result.run_id}: "
-            f"walked [bold]{result.item_count}[/bold] items, "
-            f"added [bold]{result.chunk_count}[/bold] new chunks, "
-            f"embedded [bold]{result.new_vector_count}[/bold] new vectors, "
-            f"skipped [bold]{result.skipped_chunk_count}[/bold] already-vectorised"
-        )
-    else:
-        console.print(
-            f"\n[green]✓[/green] Indexed [bold]{result.item_count}[/bold] items, "
-            f"[bold]{result.chunk_count}[/bold] chunks, "
-            f"[bold]{result.new_vector_count}[/bold] new vectors "
-            f"(run_id={result.run_id})"
-        )
-
-    # Sync collections + memberships AFTER run_indexing so items already
-    # exist in the items table (FK target for item_collections).
-    # Folder corpus does not have a collections concept.
-    if source == "zotero":
-        _sync_zotero_collections(adapter, store)
 
     store.close()
