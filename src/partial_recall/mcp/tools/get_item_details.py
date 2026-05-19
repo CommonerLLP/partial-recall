@@ -67,19 +67,43 @@ async def handle_get_item_details(
             + (f" in corpus={corpus!r}" if corpus else " (any corpus)")
         )]
 
-    source_rows = store._conn.execute(
-        """
-        SELECT source_type, COUNT(*) AS n
-        FROM chunks
-        WHERE corpus = ? AND item_key = ?
-        GROUP BY source_type
-        """,
-        (item_row["corpus"], item_row["item_key"]),
-    ).fetchall()
+    # Restrict chunk counts to the ACTIVE embedding run so the
+    # source_type breakdown and total stay consistent with the active-
+    # run vector count below. Without this restriction, a DB with
+    # multiple (or interrupted) runs would report all chunks ever
+    # inserted, while active_run.vectors_for_this_item only counts
+    # active-run vectors — a confusing inconsistency. (Codex P2 review
+    # on PR #8.)
+    active = store.get_active_run()
+    if active is not None:
+        source_rows = store._conn.execute(
+            """
+            SELECT c.source_type, COUNT(*) AS n
+            FROM chunks c
+            JOIN vectors v ON v.chunk_id = c.chunk_id
+            WHERE v.run_id = ?
+              AND c.corpus = ?
+              AND c.item_key = ?
+            GROUP BY c.source_type
+            """,
+            (active.run_id, item_row["corpus"], item_row["item_key"]),
+        ).fetchall()
+    else:
+        # No active run: fall back to chunks-table count so the
+        # response is still informative on a corpus that's been
+        # indexed but where no run is currently active.
+        source_rows = store._conn.execute(
+            """
+            SELECT source_type, COUNT(*) AS n
+            FROM chunks
+            WHERE corpus = ? AND item_key = ?
+            GROUP BY source_type
+            """,
+            (item_row["corpus"], item_row["item_key"]),
+        ).fetchall()
     source_breakdown = {row["source_type"]: int(row["n"]) for row in source_rows}
     chunk_total = sum(source_breakdown.values())
 
-    active = store.get_active_run()
     vector_total_active_run: int | None = None
     if active is not None:
         vector_total_active_run = int(store._conn.execute(

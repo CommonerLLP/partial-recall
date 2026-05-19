@@ -43,6 +43,9 @@ EXCLUDES=(
     ':(exclude).cache/**'
     ':(exclude)models/**'
     ':(exclude)tests/fixtures/cassettes/**'
+    # The script itself defines the patterns it scans for, so it
+    # cannot scan itself without false-positives.
+    ':(exclude)scripts/check-public-firewall.sh'
 )
 
 # Patterns considered leaks. Extend deliberately; over-eager additions
