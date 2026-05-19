@@ -15,9 +15,12 @@ HANDOFF.md
 STATE_OF_BRAIN.md
 TODO.md
 
-# Sessions log lives at repo root (committed); WORKING.md does not.
-# SESSION_LOG.md is the one exception — it IS committed for org transparency.
-!SESSION_LOG.md
+# SESSION_LOG.md is an append-only local archive of WORKING.md — a
+# coordination surface for agents working on the repo, NEVER
+# committed. Prior leaks via SESSION_LOG.md required deleting and
+# re-creating a CommonerLLP repo as remediation (see
+# _org/mistakes.md). Keep this rule.
+SESSION_LOG.md
 
 # Standard Python
 __pycache__/
