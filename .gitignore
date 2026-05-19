@@ -99,3 +99,7 @@ desktop.ini
 *.pem
 *.key
 secrets/
+# Exception: the source-tree `partial_recall.secrets` package is
+# part of the codebase (keyring + env-var resolution). Allow it.
+!src/partial_recall/secrets/
+!src/partial_recall/secrets/**
