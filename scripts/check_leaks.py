@@ -37,9 +37,9 @@ import argparse
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -161,8 +161,7 @@ def get_file_content_lines(path: str, *, staged: bool) -> Iterable[tuple[int, st
         text = content.decode("utf-8", errors="replace")
     except Exception:
         return
-    for i, line in enumerate(text.splitlines(), start=1):
-        yield i, line
+    yield from enumerate(text.splitlines(), start=1)
 
 
 def scan(

@@ -179,13 +179,15 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 - [ ] Doctor extension: `fts5_available` + `schema_version` + `keyring_available` checks
 - [ ] Collection filter on `semantic_search` MCP tool
 
-### v0.2.5: docs, audit, citation
-- [ ] A2 property-based tests (Hypothesis) for chunker + vector packing + text_hash
-- [ ] A5 auto-generated config reference from Pydantic
-- [ ] E1 multilingual test fixtures (10 scripts)
-- [ ] E2 i18n scaffolding (gettext `.po`; English-only ship)
-- [ ] E3 `CITATION.cff`
-- [ ] E4 README + install docs + 5-min walkthrough script + troubleshooting page
+### v0.2.5: docs sweep — SHIPPED 2026-05-19
+- [x] A5 auto-generated config reference from Pydantic. `scripts/generate_config_reference.py` walks every Pydantic model and emits `docs/config/reference.md`; the doc is the code's introspection so it cannot drift.
+- [x] E3 `CITATION.cff` at repo root — standard machine-readable citation, AGPL-3.0-or-later.
+- [x] E4 README expansion: status bumped to v0.2.4; extras table; install + first-run section; pointers to walkthrough + troubleshooting + config reference.
+- [x] `docs/walkthrough/five-minute-walkthrough.md` — install → init → doctor → index → search → MCP-server-smoke → keyring, with expected output at each step.
+- [x] `docs/troubleshooting.md` — every failure mode actually encountered in v0.2.0 → v0.2.4 development (PATH, keyring resolution order, schema-mismatch, pypdf noise, malformed PDFs, provider-mismatch on extend, iCloud UF_HIDDEN, list_collections empty, post-rewrite cached-clone divergence).
+- [/] A2 property-based tests (Hypothesis) — deferred to v0.2.6. Not docs work; sequenced into reliability cluster.
+- [/] E1 multilingual test fixtures (10 scripts) — deferred to v0.3.0 where they belong alongside locale-aware embedding routing.
+- [/] E2 i18n scaffolding (gettext `.po`) — deferred to v0.3.0 i18n shipping.
 
 ---
 

@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: >-
+  If you use partial-recall in academic work, please cite it using
+  the metadata below.
+title: "partial-recall"
+abstract: >-
+  Semantic memory for a scholar's corpus. Local-first, offline-capable
+  vector search over Zotero libraries and directories of documents,
+  with full-text (FTS5) keyword fallback and an MCP server interface
+  for use from Claude Code and other MCP-compatible clients. Designed
+  for marginalised scholars on low-power machines (4–8 GB RAM),
+  CPU-only, with no required API key or institutional subscription.
+type: software
+authors:
+  - name: "Commoner LLP"
+    affiliation: "CommonerLLP"
+repository-code: "https://github.com/CommonerLLP/partial-recall"
+url: "https://github.com/CommonerLLP/partial-recall"
+license: AGPL-3.0-or-later
+keywords:
+  - semantic search
+  - vector embeddings
+  - Zotero
+  - digital humanities
+  - South Asian studies
+  - multilingual
+  - local-first
+  - MCP
+  - Model Context Protocol
