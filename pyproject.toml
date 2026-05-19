@@ -54,12 +54,19 @@ local = [
 gemini = [
     "httpx>=0.27.0",
 ]
+keyring = [
+    # Cross-platform credential storage:
+    #   macOS  → Keychain
+    #   Linux  → Secret Service (Gnome Keyring / KWallet)
+    #   Windows → Credential Manager
+    "keyring>=24.0",
+]
 faiss = [
     "faiss-cpu>=1.8.0",
     "numpy>=1.26.0",
 ]
 all = [
-    "partial-recall[local,gemini,faiss]",
+    "partial-recall[local,gemini,faiss,keyring]",
 ]
 dev = [
     "pytest>=8.0.0",

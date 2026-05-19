@@ -169,15 +169,14 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 - [x] Schema migration 0003 (Zotero richness): items gain archive / archive_location / call_number / library_catalog columns; new collections + item_collections tables with FK CASCADE.
 - [x] C5 Zotero collections + library-location MCP exposure. `list_collections` tool returns corpus collections with parent_key + item_count; `get_item_details` now surfaces library_location dict + collections list.
 - [x] ZoteroAdapter populates new fields from Zotero's `fields` table (archive/archiveLocation/callNumber/libraryCatalog) and yields `list_zotero_collections()` + `list_collection_memberships()`. CLI `index --source zotero` syncs both into the store before run_indexing.
-- [/] D2 keyring secrets — deferred to v0.2.4.1 (substantial new module; out of v0.2.4 time-box).
+- [x] D2 keyring secrets — `partial_recall.secrets` module + `partial-recall keyring {status, set-gemini, delete-gemini}` CLI. macOS Keychain / Linux Secret Service / Windows Credential Manager via the `keyring` package (optional `[keyring]` extra). GeminiAPIProvider resolves keys: keyring → env vars. Doctor reports which source the key came from.
 - [/] D3 Faiss accelerator command — deferred to v0.2.5.
 - [/] C4 HTTP transport stub — deferred to v0.2.5.
 
-### v0.2.4.1 (next): keyring + HTTP transport stub + Faiss accelerator
-- [ ] D2 keyring secrets (macOS Keychain / Linux Secret Service / Windows Credential Manager)
+### v0.2.4.1 (next): HTTP transport stub + Faiss accelerator + doctor polish
 - [ ] D3 Faiss accelerator command (`partial-recall runs build-faiss RUN_ID`)
 - [ ] C4 HTTP transport stub (`serve --http --port N`; auth abstraction; `none` enabled)
-- [ ] Doctor extension: `fts5_available` + `schema_version` checks
+- [ ] Doctor extension: `fts5_available` + `schema_version` + `keyring_available` checks
 - [ ] Collection filter on `semantic_search` MCP tool
 
 ### v0.2.5: docs, audit, citation

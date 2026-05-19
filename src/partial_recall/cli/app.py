@@ -16,6 +16,7 @@ from partial_recall.cli.doctor import doctor_command
 from partial_recall.cli.import_cookjohn import import_app
 from partial_recall.cli.index import index_command
 from partial_recall.cli.init import init_command
+from partial_recall.cli.keyring_cmd import app as keyring_app
 from partial_recall.cli.search import search_command
 from partial_recall.cli.serve import serve_command
 from partial_recall.cli.status import status_command
@@ -42,6 +43,7 @@ app.command(
     help="Run diagnostic checks — surfaces config / corpus / install issues.",
 )(doctor_command)
 app.add_typer(import_app, name="import")
+app.add_typer(keyring_app, name="keyring")
 
 
 def _version_callback(value: bool) -> None:

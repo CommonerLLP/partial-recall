@@ -23,7 +23,6 @@ in tracebacks and start showing up as named checks.
 
 from __future__ import annotations
 
-import os
 import platform
 import shutil
 import sqlite3
@@ -108,32 +107,40 @@ def _check_config_present(cfg_path: Path) -> CheckResult:
 def _check_embedding_provider(cfg) -> CheckResult:
     provider = cfg.embedding.provider
     if provider == "gemini":
-        env_key = os.environ.get("PARTIAL_RECALL_GEMINI_API_KEY") or os.environ.get(
-            "GEMINI_API_KEY"
-        )
-        if not env_key:
+        # v0.2.4: resolve via secrets module (keyring → env vars).
+        from partial_recall.secrets import get_gemini_api_key
+        key = get_gemini_api_key()
+        if not key:
             return CheckResult(
                 name="embedding_provider",
                 status="fail",
-                message="provider=gemini but no PARTIAL_RECALL_GEMINI_API_KEY "
-                        "(or GEMINI_API_KEY) is set in the environment.",
-                hint="export PARTIAL_RECALL_GEMINI_API_KEY='...' in your shell, "
-                     "then re-run. (Keyring support is v0.2.x.)",
+                message="provider=gemini but no API key is configured "
+                        "(neither in OS keyring nor in "
+                        "PARTIAL_RECALL_GEMINI_API_KEY / GEMINI_API_KEY).",
+                hint="Store it with `partial-recall keyring set-gemini` "
+                     "(uses Keychain / Secret Service / Credential "
+                     "Manager) or export PARTIAL_RECALL_GEMINI_API_KEY "
+                     "in your shell.",
             )
         # Soft check on shape — Gemini keys look like "AIzaSy..." (39 chars).
-        if not env_key.startswith("AIzaSy") or len(env_key) < 35:
+        if not key.startswith("AIzaSy") or len(key) < 35:
             return CheckResult(
                 name="embedding_provider",
                 status="warn",
-                message="A Gemini API key is set but its shape does not match "
-                        "the expected 'AIzaSy…' / 39-character pattern.",
+                message="A Gemini API key is configured but its shape does "
+                        "not match the expected 'AIzaSy…' / 39-character "
+                        "pattern.",
                 hint="Verify the key is correct; the API call will fail at "
                      "first use if it's malformed.",
             )
+        # Indicate WHERE the key was found so a user knows whether
+        # they're on the keyring path or the env-var path.
+        from partial_recall.secrets import GEMINI_KEYRING_KEY, _keyring_get
+        source = "keyring" if _keyring_get(GEMINI_KEYRING_KEY) else "env var"
         return CheckResult(
             name="embedding_provider",
             status="ok",
-            message=f"provider=gemini ({cfg.embedding.model}); API key in env.",
+            message=f"provider=gemini ({cfg.embedding.model}); API key from {source}.",
         )
     if provider == "local-onnx":
         try:

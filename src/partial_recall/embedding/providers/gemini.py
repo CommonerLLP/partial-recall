@@ -7,7 +7,6 @@ GEMINI_API_KEY env var (fallback). v0.1.0 will add keyring secret backend.
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
@@ -42,18 +41,24 @@ def _resolve_api_key(explicit: str | None = None) -> str:
 
     Order:
         1. explicit constructor argument
-        2. PARTIAL_RECALL_GEMINI_API_KEY env var
-        3. GEMINI_API_KEY env var
+        2. OS keyring (partial-recall / gemini_api_key)
+        3. PARTIAL_RECALL_GEMINI_API_KEY env var
+        4. GEMINI_API_KEY env var
     """
     if explicit:
         return explicit
-    for var in ("PARTIAL_RECALL_GEMINI_API_KEY", "GEMINI_API_KEY"):
-        v = os.environ.get(var)
-        if v:
-            return v
+    # v0.2.4: try the OS keyring before env vars. Falls through to
+    # env if keyring is unavailable or the secret is not stored.
+    from partial_recall.secrets import get_gemini_api_key
+    value = get_gemini_api_key()
+    if value:
+        return value
     raise EmbeddingProviderAuthError(
-        "No Gemini API key found. Set PARTIAL_RECALL_GEMINI_API_KEY (or GEMINI_API_KEY) "
-        "in your environment, or pass api_key= to GeminiAPIProvider()."
+        "No Gemini API key found. Store it with `partial-recall keyring "
+        "set-gemini` (uses macOS Keychain / Linux Secret Service / "
+        "Windows Credential Manager), or set PARTIAL_RECALL_GEMINI_API_KEY "
+        "(or GEMINI_API_KEY) in your environment, or pass api_key= to "
+        "GeminiAPIProvider()."
     )
 
 
