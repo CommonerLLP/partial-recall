@@ -93,9 +93,9 @@ def test_lookalike_non_sensitive_keys_pass_through() -> None:
 
 def test_home_path_in_string_value_is_redacted() -> None:
     out = _run({
-        "msg": "opened /Users/aakash/Zotero/zotero.sqlite for indexing",
+        "msg": "opened /Users/scholar/Zotero/zotero.sqlite for indexing",
     })
-    assert "/Users/aakash" not in out["msg"]
+    assert "/Users/scholar" not in out["msg"]
     assert out["msg"] == "opened ~/Zotero/zotero.sqlite for indexing"
 
 
@@ -106,8 +106,8 @@ def test_linux_home_path_redacted() -> None:
 
 
 def test_windows_home_path_redacted() -> None:
-    out = _run({"path": r"C:\Users\Aakash\Zotero\zotero.sqlite opened"})
-    assert "Aakash" not in out["path"]
+    out = _run({"path": r"C:\Users\Scholar\Zotero\zotero.sqlite opened"})
+    assert "Scholar" not in out["path"]
     assert "~" in out["path"]
 
 
@@ -119,10 +119,10 @@ def test_pathlike_objects_are_handled() -> None:
 
 def test_multiple_paths_in_one_string() -> None:
     out = _run({
-        "event": "moved /Users/aakash/a.pdf to /Users/aakash/b.pdf",
+        "event": "moved /Users/scholar/a.pdf to /Users/scholar/b.pdf",
     })
     # Both prefixes replaced.
-    assert "/Users/aakash" not in out["event"]
+    assert "/Users/scholar" not in out["event"]
     assert out["event"].count("~") >= 2
 
 

@@ -47,9 +47,9 @@ _SENSITIVE_VALUES = {
     "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END",
 }
 _HOME_PATHS = [
-    "/Users/aakash/Library/Application Support/partial-recall/vectors.sqlite",
+    "/Users/scholar/Library/Application Support/partial-recall/vectors.sqlite",
     "/home/scholar/Documents/library.bib",
-    r"C:\Users\Aakash\Zotero\zotero.sqlite",
+    r"C:\Users\Scholar\Zotero\zotero.sqlite",
 ]
 
 
@@ -73,7 +73,7 @@ def _drain_streams(level: str, format: str) -> str:
     log.info(
         "test.combined",
         api_key=_FAKE_GEMINI_KEY,
-        msg="loading /Users/aakash/.config/partial-recall/config.toml",
+        msg="loading /Users/scholar/.config/partial-recall/config.toml",
     )
 
     return buf.getvalue()

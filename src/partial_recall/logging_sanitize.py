@@ -21,7 +21,7 @@ classes for partial-recall:
 
   * Gemini API keys (and any future provider keys).
   * Filesystem paths that identify the user or their corpus location
-    (e.g. ``/Users/aakash/Zotero/zotero.sqlite``).
+    (e.g. ``/Users/<name>/Zotero/zotero.sqlite``).
 
 Not in scope (deliberate, v0.2.0):
 
@@ -71,7 +71,7 @@ _REDACTED = "***"
 # Detect absolute paths. We're conservative: full-string-or-substring
 # match for /Users/<user>/, /home/<user>/, and C:\Users\<user>\ shapes.
 # Matching on substring (not full-string) lets us catch paths embedded
-# in longer messages like "opened /Users/aakash/Zotero/zotero.sqlite".
+# in longer messages like "opened /Users/<name>/Zotero/zotero.sqlite".
 _HOME_DIR_RE = re.compile(
     r"""
     (

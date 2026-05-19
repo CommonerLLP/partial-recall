@@ -95,7 +95,7 @@ the public can `pipx install`.
 
 ## v0.2.0 — First sliceable step toward feature-complete
 
-**Goal:** ship the load-bearing indexing-completeness slice (Zotero notes
+**Goal:** ship the essential indexing-completeness slice (Zotero notes
 + annotations + non-Zotero corpora) plus the diagnostic + safety surface
 that emerged from real first-user testing. The remaining items from the
 originally-planned v0.2.0 scope are now sequenced across v0.2.x
@@ -137,9 +137,9 @@ These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases 
 ### Success criteria (v0.2.0 line)
 
 - [x] All v0.0.1 + v0.1.0 functionality still works (205 tests passing on the v0.2.0 commit)
-- [x] Indexing top-up against a rehydrated Gemini corpus succeeds on Aakash's 29,937-item personal Zotero library (load-bearing first user)
-- [x] `doctor` surfaces the cookjohn-imported → fresh-Gemini-provider mismatch as a named warning with an actionable hint
-- [x] Notes + annotations indexable: 858 notes + 9,477 textual annotations enumerable in the personal corpus
+- [x] Indexing top-up against a rehydrated Gemini corpus completes without re-paying for already-embedded chunks
+- [x] `doctor` surfaces an `embedding_provider` mismatch between an imported run and the configured fresh provider as a named warning with an actionable hint
+- [x] Notes + annotations indexable: `ZoteroAdapter` yields a `note` source per child note and an `annotation` source per textual annotation (types 1, 2, 5)
 - [x] FolderAdapter walks a heterogeneous test corpus, respects `.partial-recallignore`, dispatches per-extension
 
 ---
