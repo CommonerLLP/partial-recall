@@ -1,0 +1,34 @@
+name: leak-scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# This job catches personal / internal markers in committed content
+# before they hit a public PR or main. See scripts/check-public-firewall.sh
+# for the patterns and CLAUDE.md § INTERNAL-DOCS-STAY-INTERNAL for the rule.
+#
+# Scope: the script does NOT scan PR titles or descriptions (those live
+# on GitHub, not in the repo). Authors are responsible for those.
+
+jobs:
+  leak-scan:
+    name: public/private firewall check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (full history for ref-mode scans)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run leak scan against working tree
+        run: |
+          bash scripts/check-public-firewall.sh
+
+      - name: Run leak scan against PR head commit message
+        if: github.event_name == 'pull_request'
+        env:
+          REF: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/check-public-firewall.sh --ref "$REF"

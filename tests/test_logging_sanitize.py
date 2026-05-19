@@ -133,8 +133,8 @@ def test_system_paths_not_touched() -> None:
 
 
 def test_non_path_strings_unchanged() -> None:
-    out = _run({"msg": "indexed 614922 chunks", "score": 0.83})
-    assert out["msg"] == "indexed 614922 chunks"
+    out = _run({"msg": "indexed 12345 chunks", "score": 0.83})
+    assert out["msg"] == "indexed 12345 chunks"
     assert out["score"] == 0.83
 
 
