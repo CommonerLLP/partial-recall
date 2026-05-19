@@ -118,6 +118,24 @@ async def handle_get_item_details(
             (active.run_id, item_row["corpus"], item_row["item_key"]),
         ).fetchone()["n"])
 
+    # v0.2.4 richness: library-location fields + collection memberships.
+    # Pull the optional schema-3 columns defensively in case a stale
+    # connection is reading a pre-migration row (shouldn't happen given
+    # auto-migration; defence-in-depth).
+    library_location = {
+        "archive": _safe_get(item_row, "archive"),
+        "archive_location": _safe_get(item_row, "archive_location"),
+        "call_number": _safe_get(item_row, "call_number"),
+        "library_catalog": _safe_get(item_row, "library_catalog"),
+    }
+    # Drop empty entries so the payload stays compact for items where
+    # none of these fields are populated.
+    library_location = {k: v for k, v in library_location.items() if v}
+
+    collections = _fetch_collections(
+        store, corpus=item_row["corpus"], item_key=item_row["item_key"]
+    )
+
     payload = {
         "item": {
             "item_key": item_row["item_key"],
@@ -129,6 +147,8 @@ async def handle_get_item_details(
             "abstract": item_row["abstract"],
             "last_indexed_at": item_row["last_indexed_at"],
             "corpus_ref": item_row["corpus_ref"],
+            "library_location": library_location,
+            "collections": collections,
         },
         "chunks": {
             "total": chunk_total,
@@ -146,6 +166,46 @@ async def handle_get_item_details(
     return [TextContent(type="text", text=json.dumps(payload, indent=2))]
 
 
+def _safe_get(row: Any, column: str) -> Any:
+    """sqlite3.Row.__getitem__ raises IndexError for missing columns.
+    This helper returns None instead so callers don't have to wrap."""
+    try:
+        return row[column]
+    except (IndexError, KeyError):
+        return None
+
+
+def _fetch_collections(
+    store: VectorStore, *, corpus: str, item_key: str
+) -> list[dict[str, Any]]:
+    try:
+        rows = store._conn.execute(
+            """
+            SELECT c.collection_key, c.name, c.parent_key
+            FROM item_collections ic
+            JOIN collections c
+              ON c.owner = ic.owner
+             AND c.corpus = ic.corpus
+             AND c.collection_key = ic.collection_key
+            WHERE ic.owner = 'local'
+              AND ic.corpus = ?
+              AND ic.item_key = ?
+            ORDER BY c.name
+            """,
+            (corpus, item_key),
+        ).fetchall()
+    except Exception:  # noqa: BLE001 — pre-schema-3 DB; report empty
+        return []
+    return [
+        {
+            "collection_key": row["collection_key"],
+            "name": row["name"],
+            "parent_key": row["parent_key"],
+        }
+        for row in rows
+    ]
+
+
 def _fetch_item(
     store: VectorStore, *, item_key: str, corpus: str | None
 ) -> Any:
@@ -153,7 +213,8 @@ def _fetch_item(
         return store._conn.execute(
             """
             SELECT item_key, corpus, item_type, title, date, creators_json,
-                   abstract, last_indexed_at, corpus_ref
+                   abstract, last_indexed_at, corpus_ref,
+                   archive, archive_location, call_number, library_catalog
             FROM items
             WHERE corpus = ? AND item_key = ?
             LIMIT 1
@@ -163,7 +224,8 @@ def _fetch_item(
     return store._conn.execute(
         """
         SELECT item_key, corpus, item_type, title, date, creators_json,
-               abstract, last_indexed_at, corpus_ref
+               abstract, last_indexed_at, corpus_ref,
+               archive, archive_location, call_number, library_catalog
         FROM items
         WHERE item_key = ?
         LIMIT 1

@@ -162,12 +162,22 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 - [x] C3 `get_item_details` — full metadata for a single item by `item_key` (+ optional `corpus`), with source-type breakdown and active-run vector count. Returns structured error payload (never raises) for missing item.
 - [/] C2 `search_fulltext` (FTS5) deferred to v0.2.4 — needs schema migration 0002 + auto-migration support for existing DBs; bundled with v0.2.4's operability slice.
 
-### v0.2.4: FTS5 + operability + reach
-- [ ] C2 `search_fulltext` (FTS5 virtual table, schema migration 0002)
-- [ ] Auto-migration support in `store/connection.py` (apply migrations to existing DBs beyond `CURRENT_SCHEMA_VERSION`)
-- [ ] D2 keyring secrets (macOS Keychain / Linux Secret Service / Windows Credential Manager)
+### v0.2.4: FTS5 + auto-migration + Zotero richness — SHIPPED 2026-05-19
+- [x] C2 `search_fulltext` MCP tool — FTS5 virtual table mirroring chunks.text_preview (unicode61 + diacritic-fold). Supports phrase, prefix, AND/OR/NOT, corpus filter, top_k. Structured error payload on malformed query.
+- [x] Auto-migration support in `store/connection.py`. Existing DBs at schema_version < CURRENT_SCHEMA_VERSION get pending migrations applied forward; future-version DBs refuse with a clear error.
+- [x] Schema migration 0002 (FTS5 chunks_fts table + triggers for INSERT/DELETE/UPDATE sync).
+- [x] Schema migration 0003 (Zotero richness): items gain archive / archive_location / call_number / library_catalog columns; new collections + item_collections tables with FK CASCADE.
+- [x] C5 Zotero collections + library-location MCP exposure. `list_collections` tool returns corpus collections with parent_key + item_count; `get_item_details` now surfaces library_location dict + collections list.
+- [x] ZoteroAdapter populates new fields from Zotero's `fields` table (archive/archiveLocation/callNumber/libraryCatalog) and yields `list_zotero_collections()` + `list_collection_memberships()`. CLI `index --source zotero` syncs both into the store before run_indexing.
+- [x] D2 keyring secrets — `partial_recall.secrets` module + `partial-recall keyring {status, set-gemini, delete-gemini}` CLI. macOS Keychain / Linux Secret Service / Windows Credential Manager via the `keyring` package (optional `[keyring]` extra). GeminiAPIProvider resolves keys: keyring → env vars. Doctor reports which source the key came from.
+- [/] D3 Faiss accelerator command — deferred to v0.2.5.
+- [/] C4 HTTP transport stub — deferred to v0.2.5.
+
+### v0.2.4.1 (next): HTTP transport stub + Faiss accelerator + doctor polish
 - [ ] D3 Faiss accelerator command (`partial-recall runs build-faiss RUN_ID`)
 - [ ] C4 HTTP transport stub (`serve --http --port N`; auth abstraction; `none` enabled)
+- [ ] Doctor extension: `fts5_available` + `schema_version` + `keyring_available` checks
+- [ ] Collection filter on `semantic_search` MCP tool
 
 ### v0.2.5: docs, audit, citation
 - [ ] A2 property-based tests (Hypothesis) for chunker + vector packing + text_hash

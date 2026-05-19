@@ -146,7 +146,7 @@ def test_embedding_provider_gemini_missing_key(
     cfg = load_config(_write_config(tmp_path, provider="gemini"))
     r = _check_embedding_provider(cfg)
     assert r.status == "fail"
-    assert "no PARTIAL_RECALL_GEMINI_API_KEY" in r.message
+    assert "no API key is configured" in r.message
     assert r.hint is not None
 
 

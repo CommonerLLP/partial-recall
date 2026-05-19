@@ -259,13 +259,18 @@ class VectorStore:
         metadata_hash: str,
         last_indexed_at: str,
         corpus_ref: str | None,
+        archive: str | None = None,
+        archive_location: str | None = None,
+        call_number: str | None = None,
+        library_catalog: str | None = None,
     ) -> None:
         self._conn.execute(
             """
             INSERT INTO items (
                 item_key, corpus, item_type, title, date, creators_json,
-                abstract, metadata_hash, last_indexed_at, corpus_ref
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                abstract, metadata_hash, last_indexed_at, corpus_ref,
+                archive, archive_location, call_number, library_catalog
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (owner, corpus, item_key) DO UPDATE SET
                 item_type = excluded.item_type,
                 title = excluded.title,
@@ -274,13 +279,102 @@ class VectorStore:
                 abstract = excluded.abstract,
                 metadata_hash = excluded.metadata_hash,
                 last_indexed_at = excluded.last_indexed_at,
-                corpus_ref = excluded.corpus_ref
+                corpus_ref = excluded.corpus_ref,
+                archive = excluded.archive,
+                archive_location = excluded.archive_location,
+                call_number = excluded.call_number,
+                library_catalog = excluded.library_catalog
             """,
             (
                 item_key, corpus, item_type, title, date, creators_json,
                 abstract, metadata_hash, last_indexed_at, corpus_ref,
+                archive, archive_location, call_number, library_catalog,
             ),
         )
+
+    # ------------------------------------------------------------------
+    # Collections (Zotero "folders" within a library), v0.2.4
+    # ------------------------------------------------------------------
+    def upsert_collection(
+        self,
+        *,
+        corpus: str,
+        collection_key: str,
+        name: str,
+        parent_key: str | None,
+        last_indexed_at: str,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO collections (
+                corpus, collection_key, name, parent_key, last_indexed_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (owner, corpus, collection_key) DO UPDATE SET
+                name = excluded.name,
+                parent_key = excluded.parent_key,
+                last_indexed_at = excluded.last_indexed_at
+            """,
+            (corpus, collection_key, name, parent_key, last_indexed_at),
+        )
+
+    def clear_collection_memberships(self, corpus: str) -> int:
+        """Remove ALL item↔collection rows for `corpus`.
+
+        Used at the top of a collection-sync pass so stale memberships
+        (items removed from collections in Zotero between runs, or
+        whole collections deleted) don't linger. Returns the row count
+        removed. Codex P2 review on PR #13.
+        """
+        cur = self._conn.execute(
+            "DELETE FROM item_collections WHERE owner = 'local' AND corpus = ?",
+            (corpus,),
+        )
+        return cur.rowcount or 0
+
+    def link_item_to_collection(
+        self,
+        *,
+        corpus: str,
+        item_key: str,
+        collection_key: str,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO item_collections (corpus, item_key, collection_key)
+            VALUES (?, ?, ?)
+            ON CONFLICT (owner, corpus, item_key, collection_key) DO NOTHING
+            """,
+            (corpus, item_key, collection_key),
+        )
+
+    def list_collections_for_corpus(
+        self, corpus: str
+    ) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            """
+            SELECT
+                c.collection_key,
+                c.name,
+                c.parent_key,
+                (SELECT COUNT(*) FROM item_collections ic
+                  WHERE ic.owner = 'local'
+                    AND ic.corpus = c.corpus
+                    AND ic.collection_key = c.collection_key) AS item_count
+            FROM collections c
+            WHERE c.owner = 'local' AND c.corpus = ?
+            ORDER BY c.name
+            """,
+            (corpus,),
+        ).fetchall()
+        return [
+            {
+                "collection_key": row["collection_key"],
+                "name": row["name"],
+                "parent_key": row["parent_key"],
+                "item_count": int(row["item_count"]),
+            }
+            for row in rows
+        ]
 
     # ------------------------------------------------------------------
     # Chunks

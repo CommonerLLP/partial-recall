@@ -26,6 +26,12 @@ class Item:
     abstract: str | None
     metadata_hash: str
     corpus_ref: str | None = None
+    # Library-location fields (Zotero richness, v0.2.4). Tell a
+    # reader where a physical / catalogued copy lives.
+    archive: str | None = None
+    archive_location: str | None = None
+    call_number: str | None = None
+    library_catalog: str | None = None
 
 
 @dataclass(frozen=True)

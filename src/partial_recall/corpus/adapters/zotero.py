@@ -104,6 +104,58 @@ class ZoteroAdapter:
                 f"cannot open Zotero DB {path} (locked? not a Zotero DB? {e})"
             ) from e
 
+    # ------------------------------------------------------------------
+    # Collections (v0.2.4) — Zotero's user-defined folders / library
+    # sub-divisions. The CLI calls these to populate the collections
+    # + item_collections tables before indexing.
+    # ------------------------------------------------------------------
+
+    def list_zotero_collections(self) -> Iterator[dict]:
+        """Yield each Zotero collection with its key, name, and the
+        key of its parent (if nested), one row per collection.
+
+        Excludes deleted collections."""
+        if not self._table_exists("collections"):
+            return
+        sql = """
+            SELECT
+                c.key            AS collection_key,
+                c.collectionName AS name,
+                parent.key       AS parent_key
+            FROM collections c
+            LEFT JOIN collections parent
+                ON parent.collectionID = c.parentCollectionID
+            WHERE c.collectionID NOT IN (SELECT collectionID FROM deletedCollections)
+        """
+        for row in self._conn.execute(sql).fetchall():
+            yield {
+                "collection_key": row["collection_key"],
+                "name": row["name"],
+                "parent_key": row["parent_key"],
+            }
+
+    def list_collection_memberships(self) -> Iterator[dict]:
+        """Yield (item_key, collection_key) pairs for every
+        item-in-collection edge in the Zotero library. Skips
+        attachments / notes / deleted items."""
+        if not self._table_exists("collectionItems"):
+            return
+        sql = """
+            SELECT i.key AS item_key, c.key AS collection_key
+            FROM collectionItems ci
+            JOIN items i        ON i.itemID = ci.itemID
+            JOIN collections c  ON c.collectionID = ci.collectionID
+            JOIN itemTypes it   ON it.itemTypeID = i.itemTypeID
+            WHERE it.typeName NOT IN ('attachment', 'note')
+              AND i.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND c.collectionID NOT IN (SELECT collectionID FROM deletedCollections)
+        """
+        for row in self._conn.execute(sql).fetchall():
+            yield {
+                "item_key": row["item_key"],
+                "collection_key": row["collection_key"],
+            }
+
     def count_items(self, since: datetime | None = None) -> int | None:
         """Cheap COUNT(*) over the same filter list_items() uses."""
         row = self._conn.execute(
@@ -136,6 +188,12 @@ class ZoteroAdapter:
             title = fields.get("title")
             date = fields.get("date")
             abstract = fields.get("abstractNote")
+            # v0.2.4: library-location richness. These tell a reader
+            # where the physical / catalogued copy of an item lives.
+            archive = fields.get("archive")
+            archive_location = fields.get("archiveLocation")
+            call_number = fields.get("callNumber")
+            library_catalog = fields.get("libraryCatalog")
             metadata_hash = self._compute_metadata_hash(title, date, creators, abstract)
             yield Item(
                 item_key=item_key,
@@ -146,6 +204,10 @@ class ZoteroAdapter:
                 creators=creators,
                 abstract=abstract,
                 metadata_hash=metadata_hash,
+                archive=archive,
+                archive_location=archive_location,
+                call_number=call_number,
+                library_catalog=library_catalog,
             )
 
     def get_sources(self, item: Item) -> Iterator[Source]:
