@@ -17,7 +17,7 @@ Open an issue at https://github.com/CommonerLLP/partial-recall/issues. Include:
 - Tests for any new behaviour.
 - Match the existing code style (`ruff check src tests`, `mypy --strict src`).
 - Be specific in the PR description: what changed and why.
-- No AI attribution lines in commit messages (org-wide convention).
+- AI attribution lines in commit messages as appropriate.
 
 ## Translations
 
