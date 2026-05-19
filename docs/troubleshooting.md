@@ -128,12 +128,12 @@ Three possible causes, in order of likelihood:
 3. Your `[zotero]` source is disabled or pointing at a different
    `sqlite_path` than the one with collections.
 
-## `Aakash's 29,937-item personal Zotero library` shows up in old commits
+## Old commits show maintainer-name or private-corpus markers
 
-Pre-v0.2.4 ROADMAP leaked personal-corpus markers. History was
-rewritten on 2026-05-18; the scrubbed history is what's on origin
-today. If you cloned in the leak window (between the v0.2.0 commit
-and the rewrite), force a fresh fetch:
+Pre-v0.2.4 ROADMAP unintentionally included some maintainer-private
+context. History was rewritten on 2026-05-18; the current origin
+content is clean. If you cloned in the leak window (between the
+v0.2.0 commit and the rewrite), force a fresh fetch:
 
 ```zsh
 git fetch origin
