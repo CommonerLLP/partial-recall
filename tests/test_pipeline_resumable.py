@@ -7,9 +7,11 @@ The contract:
   * On a clean completion, indexing_progress for that run is cleared.
   * SIGINT / SIGTERM mid-run finishes the current batch flush, writes
     progress, returns IndexResult(interrupted=True, last_processed_key=…).
-  * On resume (re-run with extend_run_id), items whose item_key sorts
-    at or before last_processed_key are fast-skipped — chunk-level
-    dedup still catches anything that slipped through.
+  * On resume (re-run with extend_run_id), the pipeline re-walks every
+    item — *no* fast-skip by item_key, because adapters do not
+    guarantee sorted iteration order. The chunk-level vector_exists
+    dedup is the cost-saving mechanism: items get walked again but
+    nothing is re-embedded.
 """
 
 from __future__ import annotations
@@ -166,11 +168,13 @@ def test_indexing_progress_kept_on_interrupt(store: VectorStore) -> None:
     assert persisted == "B"
 
 
-def test_resume_fast_skips_items_at_or_below_last_processed(
+def test_resume_re_embeds_only_missing_chunks(
     store: VectorStore,
 ) -> None:
-    """A second extend-mode call after an interrupt should not re-walk
-    items already known done."""
+    """A second extend-mode call after an interrupt re-walks every
+    item but embeds only the ones whose chunks are not yet in
+    vectors. Correctness comes from chunk-level vector_exists, not
+    from item-key sorting (which adapters do not guarantee)."""
     # First pass: interrupted after B.
     first_provider = _Provider()
     interrupting = _InterruptingAdapter(
@@ -182,8 +186,9 @@ def test_resume_fast_skips_items_at_or_below_last_processed(
     )
     assert first.interrupted
 
-    # Resume: extend the same run with a fresh provider; expect only
-    # C + D embedded (A + B fast-skipped).
+    # Resume: extend the same run with a fresh provider; A + B are
+    # already vectorised so vector_exists skips them; only C + D get
+    # new embedding calls.
     second_provider = _Provider()
     full_adapter = _Adapter([
         ("A", "alpha"), ("B", "bravo"),
@@ -197,13 +202,49 @@ def test_resume_fast_skips_items_at_or_below_last_processed(
         allow_provider_mismatch=False,
     )
     assert not second.interrupted
-    # New embeddings only for C + D (1 chunk each).
     embedded_texts: list[str] = []
     for batch in second_provider.embed_calls:
         embedded_texts.extend(batch)
     assert sorted(embedded_texts) == ["charlie", "delta"]
     # Progress cleared on clean completion.
     assert store.get_indexing_progress(first.run_id) is None
+
+
+def test_resume_correct_even_when_adapter_yields_unsorted_order(
+    store: VectorStore,
+) -> None:
+    """Regression for chatgpt-codex-connector P1 review on PR #6:
+    fast-skip by item_key would silently drop items that yield after
+    a 'larger' key. This test exercises an out-of-order adapter and
+    confirms no item is ever silently skipped."""
+    # First pass: interrupt after B. Order BACA-style.
+    first_provider = _Provider()
+    interrupting = _InterruptingAdapter(
+        [("B", "bravo"), ("D", "delta"), ("A", "alpha"), ("C", "charlie")],
+        interrupt_after=2,  # B + D processed
+    )
+    first = run_indexing(
+        adapter=interrupting, store=store, provider=first_provider,
+    )
+    assert first.interrupted
+    # Last processed item is the second one yielded — D.
+    assert first.last_processed_key == "D"
+
+    # Resume with full unsorted adapter. A and C still need embedding.
+    # A sorts BEFORE D — a naïve fast-skip would drop A. Must not.
+    second_provider = _Provider()
+    run_indexing(
+        adapter=_Adapter([
+            ("B", "bravo"), ("D", "delta"),
+            ("A", "alpha"), ("C", "charlie"),
+        ]),
+        store=store, provider=second_provider,
+        extend_run_id=first.run_id,
+    )
+    embedded = []
+    for batch in second_provider.embed_calls:
+        embedded.extend(batch)
+    assert sorted(embedded) == ["alpha", "charlie"]
 
 
 def test_resume_chunk_dedup_still_catches_items_below_progress(

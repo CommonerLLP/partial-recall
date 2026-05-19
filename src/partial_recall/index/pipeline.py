@@ -237,26 +237,27 @@ def run_indexing(
     # item whose work is fully durable in vectors.
     last_completed_key: str | None = None
 
-    # Fast-skip ahead of last_processed_key on resume. Optimisation
-    # only: chunk-level dedup (vector_exists) is the correctness
-    # guarantee; this just avoids re-walking sources for items we
-    # know are fully done.
-    resume_from_key = (
-        store.get_indexing_progress(run_id) if extended else None
-    )
-    skipping_resume = resume_from_key is not None
+    # We deliberately do NOT fast-skip by last_processed_key.
+    #
+    # An earlier draft skipped items with item_key <= last_processed_key
+    # as an optimisation, but that's only safe when adapter iteration
+    # is strictly sorted by item_key. ZoteroAdapter's SQL does not
+    # ORDER BY anything; FolderAdapter iterates by filesystem walk
+    # order. If A yields after B (legal under SQLite storage order),
+    # a resume with last_processed_key='B' would silently skip A,
+    # missing PDF extraction even if A was never processed.
+    # (Caught by chatgpt-codex-connector review on PR #6.)
+    #
+    # Cost of removal: on resume, every item is re-walked and its
+    # sources re-opened. The chunk_exists / vector_exists guards
+    # still prevent re-embedding work — the bill stays cheap; only
+    # PDF-extraction CPU is repeated. Acceptable in exchange for
+    # correctness. Sorted-order fast-skip can return as a v0.2.x
+    # enhancement once adapters declare ordering guarantees.
+    _ = store.get_indexing_progress(run_id) if extended else None
 
     for item in adapter.list_items():
         item_count += 1
-        # Resume fast-skip: items whose item_key sorts at or before
-        # last_processed_key are known-done. Only honoured when
-        # adapter ordering is deterministic; chunk-level dedup catches
-        # any miss.
-        if skipping_resume and resume_from_key is not None:
-            if item.item_key <= resume_from_key:
-                continue
-            skipping_resume = False
-
         if interrupt.requested:
             log.info("indexing.run.interrupt.requested",
                      signal=interrupt.signal_name,
