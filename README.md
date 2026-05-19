@@ -10,9 +10,17 @@ This is **a localized tool that scholars customise to fit their own corpora**. I
 
 ## Status
 
-**v0.2.3 — actively developed.** Released minors so far: v0.0.9, v0.1.0,
-v0.2.0, v0.2.1, v0.2.2, v0.2.3. See [ROADMAP.md](./ROADMAP.md) for the
-slice-by-slice plan to v0.3.0 and beyond.
+**v0.2.4 — actively developed.** Released minors so far: v0.0.9, v0.1.0,
+v0.2.0, v0.2.1, v0.2.2, v0.2.3, v0.2.4. See [ROADMAP.md](./ROADMAP.md)
+for the slice-by-slice plan to v0.3.0 and beyond.
+
+**What ships in v0.2.4 specifically:** SQLite FTS5 keyword/phrase
+search (alongside semantic search), auto-migration of existing vector
+DBs through schema bumps, Zotero library-richness in MCP responses
+(archive / call number / library catalog / collection memberships),
+and OS-keyring secrets (macOS Keychain / Linux Secret Service /
+Windows Credential Manager) so API keys don't have to live in
+`.zshrc` or shell history.
 
 ### Where it's tested today
 
@@ -45,7 +53,7 @@ own. That means the design target is:
   a supported path.
 - **Phones / tablets** — not in scope. Mobile HTTP-client access to
   a self-hosted partial-recall is on the v0.x roadmap (the HTTP
-  transport stub lands in v0.2.4).
+  transport stub is sequenced for v0.2.4.1).
 - **GPU-only / CUDA-required** — never. CPU-only is the floor.
 
 ## Stance
@@ -67,25 +75,52 @@ What it **is not**:
 
 ## Install
 
-From PyPI (once published):
+From PyPI (once published; not yet):
 
 ```bash
-pipx install partial-recall
+pipx install 'partial-recall[local,keyring]'
 ```
 
-From source (the path for v0.0.1 right now):
+From source (the path today):
 
 ```bash
 git clone https://github.com/CommonerLLP/partial-recall.git
 cd partial-recall
-pipx install .
+pipx install '.[local,keyring]'
 ```
 
 Or for development:
 
 ```bash
-pip install -e ".[dev,local]"
+pip install -e ".[dev,local,keyring]"
 ```
+
+### Extras
+
+| extra | what it adds | required for |
+|---|---|---|
+| `local` | `onnxruntime`, `tokenizers`, `huggingface-hub` | the default ONNX provider (`multilingual-e5-small`) |
+| `gemini` | `httpx` | optional Gemini API provider |
+| `keyring` | `keyring` | OS-keyring secret storage (macOS Keychain / Linux Secret Service / Windows Credential Manager) |
+| `faiss` | `faiss-cpu` | optional Faiss accelerator (sequenced for v0.2.4.1) |
+| `dev` | pytest, ruff, mypy, hypothesis, vcrpy | running the test suite + linting |
+| `all` | local + gemini + faiss + keyring | everything except `dev` |
+
+## First run
+
+```bash
+partial-recall init       # writes config.toml + asks four questions
+partial-recall doctor     # runs 9 diagnostic checks against your install
+partial-recall index      # builds the vector index
+partial-recall search "your query"
+```
+
+For a step-by-step walkthrough that validates a fresh install
+end-to-end, see [docs/walkthrough/five-minute-walkthrough.md](./docs/walkthrough/five-minute-walkthrough.md).
+For known failure modes and their fixes, see
+[docs/troubleshooting.md](./docs/troubleshooting.md). For every
+config option in `config.toml`, see
+[docs/config/reference.md](./docs/config/reference.md).
 
 Tab-completion:
 
