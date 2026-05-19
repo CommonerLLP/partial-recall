@@ -100,6 +100,8 @@ desktop.ini
 *.key
 secrets/
 # Exception: the source-tree `partial_recall.secrets` package is
-# part of the codebase (keyring + env-var resolution). Allow it.
+# part of the codebase (keyring + env-var resolution). Allow .py
+# files; the package's __pycache__/ is still ignored by the
+# generic __pycache__ rule above.
 !src/partial_recall/secrets/
-!src/partial_recall/secrets/**
+!src/partial_recall/secrets/*.py
