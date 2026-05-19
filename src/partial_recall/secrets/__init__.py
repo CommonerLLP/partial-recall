@@ -21,6 +21,7 @@ Secret-Service entry from the user's point of view.
 
 from __future__ import annotations
 
+import contextlib
 import os
 
 SERVICE_NAME = "partial-recall"
@@ -68,10 +69,9 @@ def _keyring_delete(key: str) -> None:
         raise RuntimeError(
             "The `keyring` package is not installed."
         ) from e
-    try:
+    # Delete on absent key is OK; suppress backend bugs.
+    with contextlib.suppress(Exception):
         keyring.delete_password(SERVICE_NAME, key)
-    except Exception:  # noqa: BLE001 — delete on absent key is OK
-        pass
 
 
 def get_gemini_api_key() -> str | None:
