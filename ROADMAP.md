@@ -139,7 +139,7 @@ These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases 
 - [x] All v0.0.1 + v0.1.0 functionality still works (205 tests passing on the v0.2.0 commit)
 - [x] Indexing top-up against a rehydrated Gemini corpus succeeds on a rehydrated Gemini corpus
 - [x] `doctor` surfaces the cookjohn-imported → fresh-Gemini-provider mismatch as a named warning with an actionable hint
-- [x] Notes + annotations indexable: notes and annotations enumerable in the personal corpus
+- [x] Notes + annotations indexable: `ZoteroAdapter` yields a `note` source per child note and an `annotation` source per textual annotation (types 1, 2, 5)
 - [x] FolderAdapter walks a heterogeneous test corpus, respects `.partial-recallignore`, dispatches per-extension
 
 ---
