@@ -28,7 +28,7 @@ Where the SQLite vector store lives + chunking parameters.
 
 | field | type | default | description |
 |---|---|---|---|
-| `vector_db_path` | `Path` | `PydanticUndefined` |  |
+| `vector_db_path` | `Path` | **required** |  |
 | `allow_external_volume` | `bool` | `false` |  |
 | `chunker` | `str` | `"recursive-char-1024-128-v1"` |  |
 | `chunk_size` | `int` | `1024` |  |
@@ -41,8 +41,8 @@ Pointer to a Zotero library; how to read it.
 | field | type | default | description |
 |---|---|---|---|
 | `enabled` | `bool` | `true` |  |
-| `sqlite_path` | `Path` | `PydanticUndefined` |  |
-| `storage_path` | `Path` | `PydanticUndefined` |  |
+| `sqlite_path` | `Path` | **required** |  |
+| `storage_path` | `Path` | **required** |  |
 
 ## `[folder]`
 

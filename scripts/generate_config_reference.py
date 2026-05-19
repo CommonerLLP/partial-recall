@@ -70,17 +70,25 @@ def _render_default(value: object) -> str:
 
 def _field_rows(model_cls: type) -> list[tuple[str, str, str, str]]:
     """For each model field, return (name, type, default, description)."""
+    from pydantic_core import PydanticUndefined  # type: ignore[import-untyped]
     rows = []
     for name, info in model_cls.model_fields.items():
         # Pydantic v2: info has annotation, default / default_factory, description.
         anno = info.annotation
         type_name = getattr(anno, "__name__", str(anno))
-        # Default. PydanticUndefined sentinel → required.
-        try:
-            default = info.get_default(call_default_factory=True)
-        except Exception:  # noqa: BLE001
-            default = None
-        default_md = _render_default(default)
+        # Required fields: render as **required** instead of leaking
+        # the Pydantic sentinel string into public docs. (Codex P2.)
+        if info.is_required():
+            default_md = "**required**"
+        else:
+            try:
+                default = info.get_default(call_default_factory=True)
+            except Exception:  # noqa: BLE001
+                default = None
+            if default is PydanticUndefined:
+                default_md = "**required**"
+            else:
+                default_md = _render_default(default)
         desc = info.description or ""
         rows.append((name, type_name, default_md, desc))
     return rows
