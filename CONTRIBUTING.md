@@ -9,7 +9,8 @@ Open an issue at https://github.com/CommonerLLP/partial-recall/issues. Include:
 - What you tried to do
 - What happened (and what you expected)
 - Your OS, Python version, and how you installed (`pipx`, `pip`, source)
-- For indexing or search bugs: which corpus adapter (zotero / folder), how many items in your corpus, which embedding provider you're using
+- `partial-recall --version` and `partial-recall doctor` output
+- For indexing or search bugs: which corpus adapter (zotero / folder / calibre / markdown_notes / jabref), how many items in your corpus, which embedding provider you're using
 
 ## Pull requests
 
@@ -17,17 +18,18 @@ Open an issue at https://github.com/CommonerLLP/partial-recall/issues. Include:
 - Tests for any new behaviour.
 - Match the existing code style (`ruff check src tests`, `mypy --strict src`).
 - Be specific in the PR description: what changed and why.
-- AI attribution lines in commit messages as appropriate.
 
 ## Translations
 
-The project ships in English in v0.1.0 but the i18n infrastructure (gettext) is in place. Translations welcome for v0.2.0 and beyond. Priority languages: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese.
+The project ships in English only. i18n infrastructure is not yet in place — this is planned for v0.4.0. When it is ready, priority languages will be Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, and Portuguese.
 
-If you want to translate, open an issue first so we can coordinate the string catalogue.
+If you want to contribute translations, open an issue first so we can coordinate once the infrastructure is ready.
 
 ## Adding a corpus adapter
 
 If you want to add a corpus adapter (for an open-source / open-format reference manager, note tool, or archive), please open an issue first to discuss fit. The project's stance is **open-source / open-format only** — we do not adapt for Mendeley, EndNote, Paperpile, DEVONthink, Notion, or other closed sources.
+
+Current adapters: Zotero, Folder, Calibre, Markdown notes, JabRef.
 
 ## Code of conduct
 

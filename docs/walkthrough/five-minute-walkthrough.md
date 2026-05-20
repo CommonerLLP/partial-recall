@@ -15,6 +15,10 @@ What this walkthrough proves works in v0.3.0:
 - The MCP server (`partial-recall serve`) launches over stdio
 - The keyring stores a fake API key (no real Gemini call made)
 
+Other corpus sources available but not covered here: Calibre (`--source calibre`),
+Markdown notes (`--source markdown_notes`), JabRef (`--source jabref`),
+Zotero (`--source zotero`).
+
 ---
 
 ## 1. Install (≈ 60s)
