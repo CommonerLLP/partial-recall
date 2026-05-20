@@ -39,7 +39,9 @@ log = structlog.get_logger(__name__)
 
 # JabRef writes file links as `:description:path:type` or `:path:type`.
 # We extract the path component and resolve PDFs.
-_FILE_FIELD_RE = re.compile(r":([^:]*):([^:]+):([^:]*)")
+# The path alternation handles Windows absolute paths (C:\...) whose drive-letter
+# colon would otherwise split into a spurious extra field.
+_FILE_FIELD_RE = re.compile(r":([^:]*):([A-Za-z]:[^:]+|[^:]+):([^:]*)")
 
 
 class JabRefAdapterError(PartialRecallError):
