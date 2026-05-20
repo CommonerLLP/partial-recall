@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Things that actually went wrong in development of v0.2.0 → v0.2.4,
+Things that actually went wrong in development of v0.2.0 → v0.3.0,
 each with the fix that made them stop. Read this before opening an
 issue.
 
@@ -147,6 +147,35 @@ swept up the `partial_recall.secrets` source package. v0.2.4
 narrowed the exception to `*.py` files only; `__pycache__/` stays
 ignored. If you see this on a fork or older branch, sync to current
 `.gitignore`.
+
+## `sentence-transformers` not found after installing `[multilingual]`
+
+If `partial-recall doctor` shows the embedding provider failing after you installed the `multilingual` extra:
+
+```zsh
+pipx inject partial-recall sentence-transformers
+```
+
+The `[multilingual]` extra adds `sentence-transformers` to the pipx venv. If you used `pip install` instead of `pipx`, install it into the same virtualenv.
+
+## Calibre adapter: "metadata.db not found"
+
+The `library_path` in `[calibre]` must point to the Calibre library folder itself — the directory containing `metadata.db`, not the `metadata.db` file directly.
+
+```toml
+[calibre]
+enabled = true
+library_path = "/home/researcher/Calibre Library"   # correct
+# NOT: library_path = "/home/researcher/Calibre Library/metadata.db"
+```
+
+## Markdown notes adapter: no items indexed
+
+Check that `notes_path` points to the vault root (the folder containing your `.md` files, not a subfolder). If you have a `.partial-recallignore` file, verify it is not excluding everything.
+
+## JabRef adapter: linked PDFs not found
+
+The JabRef adapter resolves file links relative to the `.bib` file location. If your PDFs are in a different directory tree, use absolute paths in your JabRef file links, or symlink the PDFs next to the `.bib` file.
 
 ## I want to use partial-recall offline / on a plane
 

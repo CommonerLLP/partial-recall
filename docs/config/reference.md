@@ -32,6 +32,8 @@ Which embedding provider produces vectors, which model, batch shape, and device.
 | Mixed multilingual / highest quality | `BAAI/bge-m3` | `sentence-transformer` | ~3.5 GB |
 | No hardware constraints, willing to use cloud | `gemini-embedding-001` | `gemini` | none (API) |
 
+**Note on multilingual coverage:** LaBSE and BGE-M3 are designed for South Asian and Arabic scripts per their model documentation. Retrieval quality across Tamil, Hindi, Bengali, Urdu, Persian, and Arabic has not yet been independently verified by partial-recall. Independent verification is planned for v0.4.0.
+
 For `sentence-transformer` models, install the `multilingual` extra first:
 ```bash
 pipx inject partial-recall sentence-transformers
