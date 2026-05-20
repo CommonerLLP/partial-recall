@@ -173,12 +173,6 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 - [/] D3 Faiss accelerator command — deferred to v0.2.5.
 - [/] C4 HTTP transport stub — deferred to v0.2.5.
 
-### v0.2.4.1 (next): HTTP transport stub + Faiss accelerator + doctor polish
-- [ ] D3 Faiss accelerator command (`partial-recall runs build-faiss RUN_ID`)
-- [ ] C4 HTTP transport stub (`serve --http --port N`; auth abstraction; `none` enabled)
-- [ ] Doctor extension: `fts5_available` + `schema_version` + `keyring_available` checks
-- [ ] Collection filter on `semantic_search` MCP tool
-
 ### Post-v0.2.4 docs sweep — landed 2026-05-19 (no version bump; docs-only)
 Docs covering features already shipped through v0.2.4. No code
 changes; no version bump (still v0.2.4 on main).
@@ -187,11 +181,6 @@ changes; no version bump (still v0.2.4 on main).
 - [x] E4 README expansion: extras table; install + first-run section; pointers to walkthrough + troubleshooting + config reference.
 - [x] `docs/walkthrough/five-minute-walkthrough.md` — install → init → doctor → index → search → MCP-server-smoke → keyring, with expected output at each step.
 - [x] `docs/troubleshooting.md` — every failure mode actually encountered in v0.2.0 → v0.2.4 development (PATH, keyring resolution order, schema-mismatch, pypdf noise, malformed PDFs, provider-mismatch on extend, iCloud UF_HIDDEN, list_collections empty, post-rewrite cached-clone divergence).
-
-### v0.2.5 (placeholder — not yet started)
-Next meaningful version bump. Candidate scope:
-- [ ] A2 property-based tests (Hypothesis) for chunker + vector packing + text_hash stability
-- [ ] Pydantic Field(description=...) on every config option so the auto-gen reference is actually useful
 
 ---
 
@@ -204,7 +193,7 @@ Next meaningful version bump. Candidate scope:
 - [x] `CalibreAdapter` (Calibre e-book library via `metadata.db`; no Calibre install required; EPUB + PDF + TXT)
 - [x] EPUB extractor (stdlib zip + html.parser; no ebooklib dep)
 - [x] DOCX extractor (stdlib zip + xml.etree; no python-docx dep; for humanities scholars using Word)
-- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE (109 languages, Tamil/Urdu/Bengali/Malayalam), BGE-M3 (100+ languages, highest quality); auto CUDA/MPS/CPU detection
+- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.4.0).
 - [x] Hardware-aware, language-aware init wizard — detects RAM + chip, surveys corpus languages, shows ranked model ladder with provenance (maintainer, HQ country, open-weights, license, documented military contracts, data sovereignty)
 - [x] Pre-release liability disclaimer in init wizard and README
 - [x] `[embedding] device = "auto"` config field (CUDA → MPS → CPU auto-detection)
@@ -219,7 +208,7 @@ Next meaningful version bump. Candidate scope:
 - [/] Snapshot / web indexing (Zotero webpage captures)
 - [/] Optional Zotero plugin (triggers indexing from Zotero UI)
 
-## v0.4.0 — Multimodal scholarship
+## v0.4.0 — Multilingual for real
 
 - [ ] Local manuscript image adapter (Tropy-compatible directory layout)
 - [ ] SigLIP multimodal embeddings for figures and plates in PDFs
@@ -244,7 +233,6 @@ Next meaningful version bump. Candidate scope:
 - [ ] Logseq adapter (open-source; markdown graph)
 - [ ] Org-mode adapter
 - [ ] Community-contributed adapters via entry points
-- [ ] Hosted SaaS (bring-your-own-bucket model first)
 - [ ] Mobile / iPad client via HTTP transport
 - [ ] CITATION.cff publication + DOI
 
@@ -256,6 +244,7 @@ Next meaningful version bump. Candidate scope:
 - A GUI application. CLI + MCP are the surfaces. (A separate visualisation project might emerge later from someone else.)
 - Replacing Zotero. We read Zotero's data; we don't compete with Zotero's authoring/citation features.
 - A built-in chat / RAG layer. The MCP client does that if the user wants it; partial-recall provides retrieval.
+- A hosted SaaS product. The tool is AGPL, local-first, and will stay that way. No cloud account, no telemetry, no SaaS tier.
 
 ---
 
