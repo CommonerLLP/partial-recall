@@ -71,7 +71,9 @@ _CATALOGUE: tuple[ModelOption, ...] = (
         description="100+ languages · highest local quality",
         detail=(
             "1024-dim · ~580 MB (int8) · ~3.5 GB RAM peak\n"
-            "        Best cross-lingual retrieval across all scripts.\n"
+            "        Best cross-lingual retrieval across all scripts per model documentation.\n"
+            "        Language coverage is per BAAI's benchmarks; not independently\n"
+            "        verified by partial-recall across all scripts.\n"
             "        CUDA/Metal-accelerated automatically if available."
         ),
         provider="sentence-transformer",
@@ -102,9 +104,12 @@ _CATALOGUE: tuple[ModelOption, ...] = (
         description="109 languages · best coverage of South Asian + Arabic scripts",
         detail=(
             "768-dim · ~550 MB download · ~2.5 GB RAM peak\n"
-            "        Covers Tamil, Malayalam, Bengali, Urdu (Arabic script),\n"
+            "        Designed for Tamil, Malayalam, Bengali, Urdu (Arabic script),\n"
             "        Hindi, Kannada, Telugu, Sinhala, Persian, Swahili.\n"
-            "        Weights run locally — your documents never leave your machine."
+            "        Coverage per Google Research benchmarks; retrieval quality\n"
+            "        across these scripts is not yet independently verified by\n"
+            "        partial-recall. Weights run locally — your documents never\n"
+            "        leave your machine."
         ),
         provider="sentence-transformer",
         model="sentence-transformers/LaBSE",
