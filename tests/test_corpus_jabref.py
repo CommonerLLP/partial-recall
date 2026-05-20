@@ -107,6 +107,26 @@ def test_resolve_file_links_ignores_non_pdf(tmp_path: Path) -> None:
     assert _resolve_file_links(field, tmp_path) == []
 
 
+def test_resolve_file_links_no_description_prefix(tmp_path: Path) -> None:
+    # :path:type format (no empty description field) — must still find the PDF
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    field = f":{pdf}:PDF"
+    result = _resolve_file_links(field, tmp_path)
+    assert result == [pdf]
+
+
+def test_resolve_file_links_multi_link(tmp_path: Path) -> None:
+    # Multiple entries separated by ; — both must be found
+    pdf1 = tmp_path / "a.pdf"
+    pdf2 = tmp_path / "b.pdf"
+    pdf1.write_bytes(b"%PDF-1.4")
+    pdf2.write_bytes(b"%PDF-1.4")
+    field = f"::{pdf1}:PDF;::{pdf2}:PDF"
+    result = _resolve_file_links(field, tmp_path)
+    assert set(result) == {pdf1, pdf2}
+
+
 # ---------------------------------------------------------------------------
 # Adapter with mocked library
 # ---------------------------------------------------------------------------

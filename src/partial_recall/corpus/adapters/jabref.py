@@ -37,11 +37,6 @@ from partial_recall.errors import CorpusUnavailableError, PartialRecallError
 
 log = structlog.get_logger(__name__)
 
-# JabRef writes file links as `:description:path:type` or `:path:type`.
-# We extract the path component and resolve PDFs.
-# The path alternation handles Windows absolute paths (C:\...) whose drive-letter
-# colon would otherwise split into a spurious extra field.
-_FILE_FIELD_RE = re.compile(r":([^:]*):([A-Za-z]:[^:]+|[^:]+):([^:]*)")
 
 
 class JabRefAdapterError(PartialRecallError):
@@ -82,18 +77,51 @@ def _parse_authors(author_field: str) -> list[dict[str, str]]:
     return creators
 
 
+def _path_from_link_entry(entry: str) -> str:
+    """Extract the path from one JabRef file link entry (:desc:path:type).
+
+    JabRef always writes a leading colon; description is usually empty so
+    fields start with `::`.  Windows absolute paths contain a drive-letter
+    colon (C:\\...) that must be treated as part of the path.
+    """
+    if not entry or not entry.startswith(":"):
+        return ""
+    raw_parts = entry[1:].split(":")  # strip leading ':' then split
+    # Re-merge Windows drive-letter fragments: single alpha letter followed
+    # by the rest of the path (e.g. ["C", "\\path\\file.pdf"] → ["C:\\path\\file.pdf"])
+    parts: list[str] = []
+    i = 0
+    while i < len(raw_parts):
+        if (len(raw_parts[i]) == 1 and raw_parts[i].isalpha()
+                and i + 1 < len(raw_parts)):
+            parts.append(raw_parts[i] + ":" + raw_parts[i + 1])
+            i += 2
+        else:
+            parts.append(raw_parts[i])
+            i += 1
+    # parts is [desc, path, type], [path, type], or [path]
+    if len(parts) >= 3:
+        return parts[1]
+    if len(parts) == 2:
+        return parts[0]  # :path:type → desc absent, parts[0] is the path
+    if len(parts) == 1:
+        return parts[0]
+    return ""
+
+
 def _resolve_file_links(file_field: str, bib_dir: Path) -> list[Path]:
     """Parse JabRef's `file` field and return resolved PDF paths that exist.
 
     JabRef writes:
         file = {:relative/path.pdf:PDF}
         file = {Description:absolute/path.pdf:PDF;:another.pdf:PDF}
+    Multiple entries are separated by `;`.
     """
     if not file_field:
         return []
     found: list[Path] = []
-    for m in _FILE_FIELD_RE.finditer(file_field):
-        raw_path = m.group(2).strip()
+    for raw_entry in file_field.split(";"):
+        raw_path = _path_from_link_entry(raw_entry.strip())
         if not raw_path:
             continue
         p = Path(raw_path)
