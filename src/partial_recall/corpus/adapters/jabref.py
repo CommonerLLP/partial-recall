@@ -125,6 +125,9 @@ class JabRefAdapter:
             )
         self._bib_dir = self.bib_path.parent
         self._library = self._load()
+        self._entries_by_key: dict[str, dict] = {
+            e["ID"]: e for e in self._library.entries if e.get("ID")
+        }
 
     def _load(self):  # type: ignore[return]
         import bibtexparser  # type: ignore[import-not-found]
@@ -218,7 +221,4 @@ class JabRefAdapter:
     # ------------------------------------------------------------------
 
     def _entry_by_key(self, key: str) -> dict | None:
-        for entry in self._library.entries:
-            if entry.get("ID") == key:
-                return entry
-        return None
+        return self._entries_by_key.get(key)
