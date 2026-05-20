@@ -166,6 +166,41 @@ def _check_embedding_provider(cfg) -> CheckResult:
     )
 
 
+def _check_keyring() -> CheckResult:
+    from partial_recall.secrets import keyring_available
+    if keyring_available():
+        try:
+            import keyring  # type: ignore[import-not-found]
+            backend = keyring.get_keyring().__class__.__name__
+        except Exception:
+            backend = "unknown"
+        return CheckResult(
+            name="keyring_available",
+            status="ok",
+            message=f"keyring package installed; backend: {backend}.",
+        )
+    try:
+        import keyring  # type: ignore[import-not-found]  # noqa: F401
+        return CheckResult(
+            name="keyring_available",
+            status="warn",
+            message="keyring package installed but no working backend found "
+                    "(null/fail backend active).",
+            hint="On Linux, install a Secret Service provider "
+                 "(e.g. gnome-keyring). On Windows, Credential Manager "
+                 "should work out of the box.",
+        )
+    except ImportError:
+        return CheckResult(
+            name="keyring_available",
+            status="warn",
+            message="keyring package not installed; secrets stored in env "
+                    "vars only.",
+            hint="Run `pipx inject partial-recall keyring` to enable secure "
+                 "OS keyring storage.",
+        )
+
+
 def _check_vector_store(cfg) -> CheckResult:
     path = cfg.index.vector_db_path
     if not path.exists():
@@ -329,6 +364,35 @@ def _check_folder_source(cfg) -> CheckResult:
     )
 
 
+def _fix_pth_uf_hidden() -> str | None:
+    """Remove UF_HIDDEN flag from .pth files in the active venv. macOS only.
+
+    Returns a human-readable message on success, or None if nothing was fixed.
+    """
+    if platform.system() != "Darwin":
+        return None
+    py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    site_packages = Path(sys.prefix) / "lib" / py_ver / "site-packages"
+    if not site_packages.exists():
+        return None
+    fixed: list[str] = []
+    for pth in site_packages.glob("*.pth"):
+        try:
+            st = pth.lstat()
+            if getattr(st, "st_flags", 0) & 0x8000:
+                import ctypes
+                libc = ctypes.CDLL(None)
+                # chflags(path, flags & ~UF_HIDDEN)
+                new_flags = st.st_flags & ~0x8000
+                libc.chflags(str(pth).encode(), new_flags)
+                fixed.append(pth.name)
+        except Exception as e:  # noqa: BLE001
+            return f"Could not fix {pth.name}: {e}"
+    if fixed:
+        return f"Cleared UF_HIDDEN on: {', '.join(fixed)}"
+    return None
+
+
 def _check_pth_uf_hidden() -> CheckResult:
     """macOS-only: verify no .pth file in the running venv carries the
     UF_HIDDEN flag (iCloud's silent saboteur of editable installs)."""
@@ -426,6 +490,7 @@ def run_all_checks(cfg_path: Path | None = None) -> list[CheckResult]:
             message="Skipping remaining checks — config did not load.",
         ))
         return results
+    results.append(_check_keyring())
     results.append(_check_embedding_provider(cfg))
     results.append(_check_vector_store(cfg))
     results.append(_check_active_run_matches_config(cfg))
@@ -451,6 +516,9 @@ def doctor_command(
     json_output: bool = typer.Option(  # noqa: B008
         False, "--json", help="Emit structured JSON to stdout instead of a table.",
     ),
+    fix: bool = typer.Option(  # noqa: B008
+        False, "--fix", help="Apply safe automatic fixes for known issues.",
+    ),
 ) -> None:
     """Run diagnostic checks against your partial-recall install.
 
@@ -460,8 +528,18 @@ def doctor_command(
       ✗ fail  — something is wrong; the hint explains how to fix it
       · skip  — not applicable (e.g. folder check when folder is disabled)
 
+    Pass --fix to automatically repair issues that have a safe automated fix
+    (currently: macOS UF_HIDDEN flag on .pth files in the active venv).
+
     Exit status is non-zero if any check fails.
     """
+    if fix:
+        msg = _fix_pth_uf_hidden()
+        if msg:
+            console.print(f"[green]fixed:[/green] {msg}")
+        else:
+            console.print("[dim]--fix: nothing to repair.[/dim]")
+
     results = run_all_checks(config)
 
     if json_output:

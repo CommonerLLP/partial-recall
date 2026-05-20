@@ -5,7 +5,7 @@ to indexing a small corpus to running a semantic search, in
 roughly five minutes on an Apple Silicon M1 with 8 GB RAM. Times
 will be longer on slower CPUs; the steps are the same.
 
-What this walkthrough proves works in v0.2.4:
+What this walkthrough proves works in v0.3.0:
 
 - `pipx install` succeeds
 - `partial-recall init` writes a config you can read
@@ -33,7 +33,7 @@ Check:
 
 ```zsh
 partial-recall --version
-# → partial-recall 0.2.4
+# → partial-recall 0.3.0
 ```
 
 If you get `command not found: partial-recall`, see
@@ -45,15 +45,20 @@ If you get `command not found: partial-recall`, see
 partial-recall init
 ```
 
-You'll be asked four questions:
+The wizard now adapts to your hardware and corpus languages:
 
-1. **Embedding provider profile.** Pick `1` (local ONNX) for the
-   first run — no API key needed.
-2. **Vector DB path.** Accept the default (under your platform's
+1. **Corpus language.** Pick `1` (Latin-script) for a first run in
+   English. Change to `2` (South Asian scripts) if your corpus is in
+   Tamil, Urdu, Bengali, Malayalam, or Hindi.
+2. **Embedding model.** The wizard detects your RAM and shows a ranked
+   list. Pick `1` (the recommended model) for the first run. Each
+   option shows who maintains it, whether it's open-source, and any
+   documented military contracts.
+3. **Vector DB path.** Accept the default (under your platform's
    user data dir, e.g. `~/.local/share/partial-recall/` on Linux).
-3. **Default Zotero?** Say `n` for now; we're going to use a
+4. **Default Zotero?** Say `n` for now; we're going to use a
    small folder corpus instead.
-4. **Skip Zotero?** Say `y`.
+5. **Skip Zotero?** Say `y`.
 
 Then under `[folder]` in the written config, edit it to enable
 the folder corpus and point at a sample directory:

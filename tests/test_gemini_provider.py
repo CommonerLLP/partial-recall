@@ -38,6 +38,7 @@ def _make_client(responses: list[MagicMock]) -> MagicMock:
 
 
 def test_resolve_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("partial_recall.secrets._keyring_get", lambda _key: None)
     monkeypatch.setenv("PARTIAL_RECALL_GEMINI_API_KEY", "test-key-123")
     p = GeminiAPIProvider(http_client=_make_client([]))
     assert p._api_key == "test-key-123"
@@ -45,6 +46,7 @@ def test_resolve_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_missing_api_key_raises_auth_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("partial_recall.secrets._keyring_get", lambda _key: None)
     monkeypatch.delenv("PARTIAL_RECALL_GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(EmbeddingProviderAuthError):

@@ -2,25 +2,36 @@
 
 > *Semantic memory for your scholarly corpus. Because total recall was always a fiction.*
 
+> **PRE-RELEASE — NOT FOR GENERAL USE.** partial-recall is under active development.
+> It may lose data, corrupt indices, or behave in unexpected ways. Back up your research
+> materials before indexing. No warranty is given. CommonerLLP and contributors accept no
+> liability for any loss or damage arising from use. See [AGPL-3.0](./LICENSE).
+
 **partial-recall is not about replacing humans doing their intellectual work.** It is an aid for when keyword and string-matching search are not useful — when you remember vaguely that you read something but not the exact words. It uses vector embeddings to bridge that gap, across multi-media formats (PDFs, notes, annotations, soon images and manuscript scans).
 
-**Built for humanities and social-science scholars working with multilingual archives** — sources often not in their *modern* script (Persian, Arabic, Tamil, Bengali, pre-modern Devanagari, manuscript Latin, classical Chinese, and the long list of others), on laptops without a GPU, and without budget for a SaaS subscription. The defaults assume none of those luxuries: CPU-only, no cloud account, no API key.
+**Built for humanities and social-science scholars working with multilingual archives** — sources often not in their *modern* script (Persian, Arabic, Tamil, Bengali, pre-modern Devanagari, manuscript Latin, classical Chinese, and the long list of others), on laptops that may or may not have a GPU, and without budget for a SaaS subscription. The defaults assume no cloud account and no API key.
 
 This is **a localized tool that scholars customise to fit their own corpora**. It is not a SaaS product, and not something that "just works out of the box." Indexing your corpus, choosing your embedding model, adapting to your languages and conventions — all of that is yours to configure. The tool stays out of your way; the reading is still yours to do.
 
 ## Status
 
-**v0.2.4 — actively developed.** Released minors so far: v0.0.9, v0.1.0,
-v0.2.0, v0.2.1, v0.2.2, v0.2.3, v0.2.4. See [ROADMAP.md](./ROADMAP.md)
-for the slice-by-slice plan to v0.3.0 and beyond.
+**v0.3.0-dev — actively developed, not yet released.** Released minors so far:
+v0.0.9, v0.1.0, v0.2.0–v0.2.4. See [ROADMAP.md](./ROADMAP.md) for the plan
+to v0.3.0 and beyond.
 
-**What ships in v0.2.4 specifically:** SQLite FTS5 keyword/phrase
-search (alongside semantic search), auto-migration of existing vector
-DBs through schema bumps, Zotero library-richness in MCP responses
-(archive / call number / library catalog / collection memberships),
-and OS-keyring secrets (macOS Keychain / Linux Secret Service /
-Windows Credential Manager) so API keys don't have to live in
-`.zshrc` or shell history.
+**What is landing in v0.3.0:**
+- **Five corpus adapters:** Zotero, folder-of-files, markdown notes folders
+  (Obsidian, The Archive, Zettlr), JabRef/BibTeX, and Calibre e-book libraries.
+- **EPUB and DOCX extraction** — no extra dependencies; stdlib zip+html/xml parsers.
+- **Multilingual embedding via sentence-transformers** — LaBSE (109 languages,
+  covers Tamil/Urdu/Bengali/Malayalam/Sinhala), BAAI/BGE-M3 (100+ languages,
+  highest quality), and others. Automatic GPU/Metal acceleration on NVIDIA and
+  Apple Silicon.
+- **Hardware-aware init wizard** — detects your RAM and chip, asks what scripts
+  your corpus covers, and recommends a calibrated model ladder with provenance,
+  data-sovereignty notes, and documented military contracts for each option.
+- FTS5 keyword search, auto-migration, Zotero library-richness in MCP responses,
+  and OS-keyring secrets (all shipped in v0.2.x) remain stable.
 
 ### Where it's tested today
 
@@ -54,7 +65,12 @@ own. That means the design target is:
 - **Phones / tablets** — not in scope. Mobile HTTP-client access to
   a self-hosted partial-recall is on the v0.x roadmap (the HTTP
   transport stub is sequenced for v0.2.4.1).
-- **GPU-only / CUDA-required** — never. CPU-only is the floor.
+
+**GPU note:** CPU is the baseline floor — the tool never requires a GPU. If
+you have an NVIDIA GPU (CUDA) or an Apple Silicon chip (Metal/MPS), the
+`sentence-transformer` embedding provider detects and uses it automatically.
+University Linux workstations and researchers with 16–24 GB Apple M-series
+chips get hardware acceleration with zero configuration.
 
 ## Stance
 
@@ -70,7 +86,7 @@ What it **is not**:
 
 - Not a Mendeley / EndNote / Paperpile / DEVONthink / Notion plugin. These are closed formats; supporting them is not a roadmap item.
 - Not a SaaS product. No cloud account. No telemetry, ever.
-- Not designed for GPU-only environments. CPU-only is the floor; CPU is the design target.
+- Not GPU-required. CPU is the floor and the design target; GPU/Metal acceleration is a bonus when available.
 - Not supported on Chromebooks. Most are too RAM-constrained or locked-down to run the ONNX model + a full Python install.
 
 ## Install
@@ -99,12 +115,19 @@ pip install -e ".[dev,local,keyring]"
 
 | extra | what it adds | required for |
 |---|---|---|
-| `local` | `onnxruntime`, `tokenizers`, `huggingface-hub` | the default ONNX provider (`multilingual-e5-small`) |
-| `gemini` | `httpx` | optional Gemini API provider |
+| `local` | `onnxruntime`, `tokenizers`, `huggingface-hub` | default ONNX provider (`multilingual-e5-small`) |
+| `multilingual` | `sentence-transformers` | LaBSE, BGE-M3, and other multilingual models with CUDA/Metal support |
+| `gemini` | `httpx` | optional Gemini cloud API provider |
 | `keyring` | `keyring` | OS-keyring secret storage (macOS Keychain / Linux Secret Service / Windows Credential Manager) |
-| `faiss` | `faiss-cpu` | optional Faiss accelerator (sequenced for v0.2.4.1) |
+| `faiss` | `faiss-cpu` | optional Faiss accelerator |
 | `dev` | pytest, ruff, mypy, hypothesis, vcrpy | running the test suite + linting |
-| `all` | local + gemini + faiss + keyring | everything except `dev` |
+| `all` | local + multilingual + gemini + faiss + keyring | everything except `dev` |
+
+For multilingual South Asian / Arabic / African corpora (Tamil, Urdu, Bengali, Malayalam, Swahili, etc.), install the multilingual extra and configure LaBSE or BGE-M3 via the init wizard:
+
+```bash
+pipx install 'partial-recall[local,multilingual,keyring]'
+```
 
 ## First run
 
@@ -140,14 +163,24 @@ partial-recall init
 
 The wizard walks through:
 
-- **Embedding provider** — choose from curated profiles, not raw model SKUs:
-  1. English-only (faster, smaller)
-  2. Multilingual (default; `multilingual-e5-small` ONNX, 100+ languages)
-  3. Gemini cloud — *your choice*. Using a cloud provider sends your chunks to Google's servers for embedding, and Google bills you for the API calls. The tool supports it (e.g. for 3072-dim quality, or for `zotero-mcp`-imported corpora that are already Gemini-embedded), but it is never the default. Pick option 2 if you want everything to stay on your laptop.
-  4. Advanced (specify your own model)
-- **Vector DB location** — defaults to a `platformdirs` user-data directory. If you supply an external-volume path, the wizard warns about portability and unmount risk.
-- **Zotero auto-detection** — checks `~/Zotero/zotero.sqlite` and offers to wire it up.
-- **MCP client snippet (optional)** — if you want to use partial-recall from an LLM client that speaks the Model Context Protocol, the wizard prints the JSON snippet to paste into that client's settings. Skip if you only want the terminal CLI.
+- **Corpus language survey** — asks what scripts your research materials are in
+  (Latin-script only / South Asian scripts / Arabic-Persian / mixed). This drives
+  the model recommendation.
+- **Hardware detection** — silently reads your RAM and chip type, then shows a
+  ranked ladder of embedding models calibrated to both. Each option shows:
+  - RAM requirement, download size, language coverage
+  - Who maintains the model and where they are headquartered
+  - Open-weights or proprietary API
+  - Documented defence/military contracts (factual, not opinion)
+  - Whether your documents leave your machine or stay local
+  - A plain-English disclaimer that these are suggestions, not guarantees — and
+    that the risk is yours if you override the recommendation
+- **Vector DB location** — defaults to a `platformdirs` user-data directory. If
+  you supply an external-volume path, the wizard warns about portability risk.
+- **Zotero auto-detection** — checks `~/Zotero/zotero.sqlite` and offers to wire
+  it up.
+- **MCP client snippet** — prints the JSON snippet to paste into your MCP client
+  (Claude Code, Claude Desktop, etc.) if you want LLM-assisted search.
 
 ### 2. Build the index — two paths
 
@@ -265,10 +298,13 @@ Or let your client spawn it automatically — the `init` wizard prints the JSON 
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for what's coming:
+See [ROADMAP.md](./ROADMAP.md) for the full plan.
 
-- **v0.1.0** — Folder-of-PDFs adapter, HTTP transport, cross-platform CI (Linux + Windows), keyring-backed secrets, skip-already-indexed flag, bibliography output mode.
-- **v0.2.0 and beyond** — Obsidian vaults, IIIF (British Library, Bodleian, BnF, Vatican, Stanford, Princeton), Indic-strong embedding models, local manuscript-image OCR.
+**What's coming after v0.3.0:**
+- IIIF image manifests (British Library, Bodleian, BnF, Vatican) for manuscript corpora
+- Local manuscript-image OCR (low-resource Indic script models)
+- Better multilingual chunking (tokenizer-aware splitting for Tamil, Bengali, Urdu)
+- i18n: Hindi, Tamil, Bengali, Urdu, Swahili interface strings (gettext scaffolding)
 
 ## License
 

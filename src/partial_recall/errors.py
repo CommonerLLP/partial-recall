@@ -37,8 +37,8 @@ class EmbeddingProviderNetworkError(EmbeddingProviderError):
 
 class EmbeddingProviderAuthError(EmbeddingProviderError):
     actionable_hint = (
-        "Run `partial-recall init` to reconfigure your API key, "
-        "or check PARTIAL_RECALL_GEMINI_API_KEY env var."
+        "Run `partial-recall keyring set-gemini` to store your key in the "
+        "OS keyring, or export PARTIAL_RECALL_GEMINI_API_KEY in your shell."
     )
 
 

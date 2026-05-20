@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from partial_recall.corpus.adapters.folder import FolderAdapter, _stable_item_key
+from partial_recall.corpus.adapters._shared import stable_item_key as _stable_item_key
+from partial_recall.corpus.adapters.folder import FolderAdapter
 from partial_recall.errors import CorpusUnavailableError
 
 

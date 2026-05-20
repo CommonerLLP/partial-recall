@@ -4,14 +4,12 @@ The answer to "is partial-recall just for Zotero users?" — no. Point it
 at any directory and it walks recursively, picking up text-bearing
 files by extension.
 
-v0.2.0 scope:
-  * PDF (via the existing pypdf extractor)
+Supported formats:
+  * PDF (via pypdf extractor)
   * Plain text (.txt)
-  * Markdown (.md / .markdown) — extracted as raw text, no rendering
-  * EPUB and DOCX are *advertised* extensions but currently raise
-    UnsupportedExtension; their adapters need extra dependencies
-    (ebooklib, python-docx) and ship later. Files with these
-    extensions are skipped with a structured log warning, not crashed.
+  * Markdown (.md / .markdown)
+  * EPUB (stdlib zip+html parser — no extra dep)
+  * DOCX / Word documents (stdlib zip+xml parser — no extra dep)
 
 The adapter respects an optional `.partial-recallignore` file at the
 root of each configured path: gitignore-style globs, one per line,
@@ -25,7 +23,6 @@ debugging / external open commands.
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 from collections.abc import Iterator
 from datetime import datetime
@@ -33,64 +30,27 @@ from pathlib import Path
 
 import structlog
 
+from partial_recall.corpus.adapters._shared import matches_any, read_ignorefile, stable_item_key
 from partial_recall.corpus.types import Item, ItemKind, Source
 from partial_recall.errors import CorpusUnavailableError, PartialRecallError
+from partial_recall.extract.docx import extract_docx_text
+from partial_recall.extract.epub import extract_epub_text
 from partial_recall.extract.pdf import PdfExtractionError, extract_pdf_text
 
 log = structlog.get_logger(__name__)
 
 
-# Extensions we have working extractors for, vs. extensions we know
-# about but haven't wired the extractor for yet.
 _TEXT_EXTENSIONS = frozenset({".txt", ".md", ".markdown"})
 _PDF_EXTENSIONS = frozenset({".pdf"})
-_DEFERRED_EXTENSIONS = frozenset({".epub", ".docx"})
-_KNOWN_EXTENSIONS = _TEXT_EXTENSIONS | _PDF_EXTENSIONS | _DEFERRED_EXTENSIONS
+_EPUB_EXTENSIONS = frozenset({".epub"})
+_DOCX_EXTENSIONS = frozenset({".docx"})
+_KNOWN_EXTENSIONS = _TEXT_EXTENSIONS | _PDF_EXTENSIONS | _EPUB_EXTENSIONS | _DOCX_EXTENSIONS
 
 
 class FolderAdapterError(PartialRecallError):
     """FolderAdapter-specific failure."""
 
 
-def _stable_item_key(path: Path) -> str:
-    """A short, stable, readable identifier for a file.
-
-    The first 12 hex chars of the SHA-256 of the absolute path make the
-    key globally unique within a corpus and stable across runs. We
-    append the file's stem (lowercased, alnum-only, length-capped) so
-    a human reading CLI output sees recognisable identifiers.
-    """
-    h = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:12]
-    stem = "".join(c if c.isalnum() else "_" for c in path.stem.lower())[:30]
-    return f"{h}-{stem}" if stem else h
-
-
-def _read_ignorefile(path: Path) -> list[str]:
-    """Return non-blank, non-comment lines from a .partial-recallignore."""
-    if not path.exists():
-        return []
-    out: list[str] = []
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        out.append(line)
-    return out
-
-
-def _matches_any(rel: str, patterns: list[str]) -> bool:
-    """Match a relative path against gitignore-ish globs (fnmatch semantics)."""
-    if not patterns:
-        return False
-    for pat in patterns:
-        # Strip leading "./" since fnmatch doesn't know what to do with it.
-        p = pat.lstrip("./")
-        if fnmatch.fnmatch(rel, p):
-            return True
-        # gitignore-style "dir/" should match anything under dir/.
-        if p.endswith("/") and (rel.startswith(p) or rel == p.rstrip("/")):
-            return True
-    return False
 
 
 class FolderAdapter:
@@ -128,7 +88,7 @@ class FolderAdapter:
         )
         # Pre-load ignore patterns per root.
         self._ignore_patterns: dict[Path, list[str]] = {
-            r: _read_ignorefile(r / ".partial-recallignore") for r in self.roots
+            r: read_ignorefile(r / ".partial-recallignore") for r in self.roots
         }
 
     def close(self) -> None:
@@ -150,7 +110,7 @@ class FolderAdapter:
                 continue
             mtime = datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds")
             yield Item(
-                item_key=_stable_item_key(path),
+                item_key=stable_item_key(path),
                 corpus="folder",
                 item_type="file",
                 title=path.stem,
@@ -192,14 +152,10 @@ class FolderAdapter:
             except OSError as e:
                 log.warning("folder.adapter.read_failed", path=str(path), error=str(e))
                 return None
-        if ext in _DEFERRED_EXTENSIONS:
-            log.info(
-                "folder.adapter.extension_deferred",
-                path=str(path),
-                extension=ext,
-                note="extractor lands in a later release; file skipped",
-            )
-            return None
+        if ext in _EPUB_EXTENSIONS:
+            return extract_epub_text(path)
+        if ext in _DOCX_EXTENSIONS:
+            return extract_docx_text(path)
         log.info("folder.adapter.unknown_extension", path=str(path), extension=ext)
         return None
 
@@ -229,7 +185,7 @@ class FolderAdapter:
                 # this, `drafts/` does not match `drafts\foo.md` on
                 # Windows.
                 rel_posix = rel.as_posix() if isinstance(rel, Path) else str(rel)
-                if _matches_any(rel_posix, patterns):
+                if matches_any(rel_posix, patterns):
                     continue
                 # Hide dotfiles and dot-directories by default — they're
                 # almost always tooling, not corpus.

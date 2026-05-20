@@ -1,6 +1,6 @@
 [project]
 name = "partial-recall"
-version = "0.2.4"
+version = "0.3.0"
 description = "Semantic memory for your scholarly corpus. Multilingual, offline-first, free."
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
@@ -51,6 +51,12 @@ local = [
     "huggingface-hub>=0.20.0",
     "numpy>=1.26.0",
 ]
+multilingual = [
+    # sentence-transformers brings torch + transformers; enables LaBSE, BGE-M3,
+    # multilingual-e5-large and any other HuggingFace sentence embedding model.
+    # CUDA/Metal (MPS) acceleration is used automatically if available.
+    "sentence-transformers>=2.6.0",
+]
 gemini = [
     "httpx>=0.27.0",
 ]
@@ -66,7 +72,7 @@ faiss = [
     "numpy>=1.26.0",
 ]
 all = [
-    "partial-recall[local,gemini,faiss,keyring]",
+    "partial-recall[local,multilingual,gemini,faiss,keyring]",
 ]
 dev = [
     "pytest>=8.0.0",

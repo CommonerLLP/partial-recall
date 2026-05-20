@@ -102,9 +102,10 @@ def _write_config(
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Strip Gemini key env vars so checks see a clean slate."""
+    """Strip Gemini key env vars and keyring so checks see a clean slate."""
     monkeypatch.delenv("PARTIAL_RECALL_GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr("partial_recall.secrets._keyring_get", lambda _key: None)
     return
 
 
@@ -164,6 +165,7 @@ def test_embedding_provider_gemini_warns_on_bad_shape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from partial_recall.config.loader import load_config
+    monkeypatch.setattr("partial_recall.secrets._keyring_get", lambda _key: None)
     monkeypatch.setenv("PARTIAL_RECALL_GEMINI_API_KEY", "garbage")
     cfg = load_config(_write_config(tmp_path, provider="gemini"))
     r = _check_embedding_provider(cfg)

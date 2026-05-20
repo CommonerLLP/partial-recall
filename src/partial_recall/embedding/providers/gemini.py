@@ -56,9 +56,8 @@ def _resolve_api_key(explicit: str | None = None) -> str:
     raise EmbeddingProviderAuthError(
         "No Gemini API key found. Store it with `partial-recall keyring "
         "set-gemini` (uses macOS Keychain / Linux Secret Service / "
-        "Windows Credential Manager), or set PARTIAL_RECALL_GEMINI_API_KEY "
-        "(or GEMINI_API_KEY) in your environment, or pass api_key= to "
-        "GeminiAPIProvider()."
+        "Windows Credential Manager), or export "
+        "PARTIAL_RECALL_GEMINI_API_KEY in your shell."
     )
 
 

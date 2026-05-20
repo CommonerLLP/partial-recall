@@ -1,11 +1,15 @@
 """Tests for the CLI init wizard.
 
 Uses Typer's CliRunner with stdin input simulation.
+The wizard now has a hardware-aware, language-aware ladder:
+  1) corpus language group (1-4)
+  2) model choice from the ranked list (1-N)
+  3) vector DB path (Enter for default)
+  4) Zotero (skip)
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -17,23 +21,30 @@ from partial_recall.config.loader import load_config
 runner = CliRunner()
 
 
-def test_init_writes_config_with_default_choices(tmp_path: Path) -> None:
-    """User accepts all defaults: option 1 (local-onnx default), default vector
-    DB path, no Zotero (will skip).
-    """
+def _mock_hardware(
+    monkeypatch: pytest.MonkeyPatch, ram_gb: float = 8.0, apple: bool = False
+) -> None:
+    from partial_recall.hardware import HardwareProfile
+    hw = HardwareProfile(ram_gb=ram_gb, is_apple_silicon=apple, tier="standard")
+    monkeypatch.setattr("partial_recall.cli.init.detect_hardware", lambda: hw)
+
+
+def test_init_writes_config_latin_corpus_minimal_ram(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Latin corpus + 4 GB RAM → e5-small recommended and chosen."""
+    from partial_recall.hardware import HardwareProfile
+    hw = HardwareProfile(ram_gb=4.0, is_apple_silicon=False, tier="minimal")
+    monkeypatch.setattr("partial_recall.cli.init.detect_hardware", lambda: hw)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
     cfg_path = tmp_path / "config.toml"
-    # Stdin: pick "1", press Enter for vector DB default. Zotero — auto-detect
-    # may or may not find it; provide enough input for the worst case:
-    stdin = "\n".join(
-        [
-            "1",  # provider profile: option 1 (English/Latin-script)
-            "",  # accept default vector DB path
-            # Zotero — auto-detect may or may not find it:
-            "n",  # if "Use this?" asked: no
-            "y",  # "Skip Zotero?" yes
-            "",  # filler if any
-        ]
-    ) + "\n"
+    stdin = "\n".join([
+        "1",   # corpus language: Latin-script
+        "1",   # model choice: recommended (e5-small on minimal)
+        "",    # accept default vector DB path
+        "y",   # skip Zotero
+    ]) + "\n"
     result = runner.invoke(
         app,
         ["init", "--config", str(cfg_path), "--force", "--allow-external-volume"],
@@ -46,7 +57,69 @@ def test_init_writes_config_with_default_choices(tmp_path: Path) -> None:
     assert cfg_path.exists()
     cfg = load_config(cfg_path)
     assert cfg.embedding.provider == "local-onnx"
-    assert cfg.embedding.model == "intfloat/multilingual-e5-small"
+    assert "multilingual-e5-small" in cfg.embedding.model
+
+
+def test_init_writes_config_south_asian_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """South Asian corpus + 8 GB RAM → LaBSE or BGE-M3 at top; pick option 1."""
+    _mock_hardware(monkeypatch, ram_gb=8.0)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    cfg_path = tmp_path / "config.toml"
+    stdin = "\n".join([
+        "2",   # corpus language: South Asian scripts
+        "1",   # pick top recommendation
+        "",    # default vector DB path
+        "y",   # skip Zotero
+    ]) + "\n"
+    result = runner.invoke(
+        app,
+        ["init", "--config", str(cfg_path), "--force", "--allow-external-volume"],
+        input=stdin,
+    )
+    if result.exit_code != 0:
+        print("STDOUT:", result.stdout)
+        print("EXCEPTION:", result.exception)
+    assert result.exit_code == 0
+    cfg = load_config(cfg_path)
+    # Top pick for south_asian + 8 GB should be LaBSE or BGE-M3
+    assert cfg.embedding.provider == "sentence-transformer"
+    assert cfg.embedding.model in (
+        "sentence-transformers/LaBSE",
+        "BAAI/bge-m3",
+    )
+
+
+def test_init_powerful_apple_silicon_south_asian(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """16 GB Apple Silicon + South Asian corpus → BGE-M3 recommended."""
+    from partial_recall.hardware import HardwareProfile
+    hw = HardwareProfile(ram_gb=16.0, is_apple_silicon=True, tier="powerful")
+    monkeypatch.setattr("partial_recall.cli.init.detect_hardware", lambda: hw)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    cfg_path = tmp_path / "config.toml"
+    stdin = "\n".join([
+        "2",   # South Asian scripts
+        "1",   # top recommendation
+        "",    # default vector DB path
+        "y",   # skip Zotero
+    ]) + "\n"
+    result = runner.invoke(
+        app,
+        ["init", "--config", str(cfg_path), "--force", "--allow-external-volume"],
+        input=stdin,
+    )
+    if result.exit_code != 0:
+        print("STDOUT:", result.stdout)
+        print("EXCEPTION:", result.exception)
+    assert result.exit_code == 0
+    cfg = load_config(cfg_path)
+    assert cfg.embedding.provider == "sentence-transformer"
+    assert cfg.embedding.model == "BAAI/bge-m3"
 
 
 def test_init_aborts_if_existing_config_and_no_force(tmp_path: Path) -> None:
@@ -58,35 +131,34 @@ def test_init_aborts_if_existing_config_and_no_force(tmp_path: Path) -> None:
         input="n\n",
     )
     assert result.exit_code == 1
-    # Existing content unchanged
     assert cfg_path.read_text(encoding="utf-8") == "existing"
 
 
-def test_init_disabled_profile_re_prompts(
+def test_init_custom_model_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """If user picks a disabled profile, wizard re-prompts and accepts the next pick."""
-    from partial_recall.cli import init as init_mod
-
-    patched = tuple(
-        replace(p, enabled=False) if i == 2 else p
-        for i, p in enumerate(init_mod.PROVIDER_PROFILES)
-    )
-    monkeypatch.setattr(init_mod, "PROVIDER_PROFILES", patched)
-    # Pin home to tmp_path so the Zotero default path *definitely*
-    # doesn't exist — wizard takes the deterministic "No Zotero
-    # found / Skip?" branch regardless of the host machine.
+    """User picks the 'Enter manually' option and types a custom model name."""
+    _mock_hardware(monkeypatch, ram_gb=8.0)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
+    # Find out how many options the standard corpus produces to pick the custom idx.
+    # Rather than hardcoding, just pick a very high number and let the wizard
+    # re-prompt. Instead, we pass a large-enough number.
+    # The custom option is always the last numbered item.
+    # For simplicity, we use "4" (mixed) language which shows all options,
+    # and the custom option is last. We'll drive enough "next" to get there
+    # by using the CliRunner's input stream.
+    # Custom option index for standard tier with mixed language = 5 (bge-m3, LaBSE,
+    # e5-large, e5-small, gemini, custom). Let's just count: 5 options + custom = 6.
     cfg_path = tmp_path / "config.toml"
-    stdin = "\n".join(
-        [
-            "3",  # disabled profile (patched)
-            "1",  # fallback to option 1
-            "",  # default vector DB
-            "y",  # skip Zotero? yes
-        ]
-    ) + "\n"
+    stdin = "\n".join([
+        "4",                              # mixed corpus
+        "6",                              # custom model (6th option = after 5 catalogue entries)
+        "2",                              # provider: sentence-transformer
+        "google/muril-base-cased",        # model name
+        "",                               # default vector DB
+        "y",                              # skip Zotero
+    ]) + "\n"
     result = runner.invoke(
         app,
         ["init", "--config", str(cfg_path), "--force", "--allow-external-volume"],
@@ -97,7 +169,8 @@ def test_init_disabled_profile_re_prompts(
         print("EXCEPTION:", result.exception)
     assert result.exit_code == 0
     cfg = load_config(cfg_path)
-    assert cfg.embedding.provider == "local-onnx"  # fallback to option 1
+    assert cfg.embedding.provider == "sentence-transformer"
+    assert cfg.embedding.model == "google/muril-base-cased"
 
 
 def test_version_flag() -> None:
