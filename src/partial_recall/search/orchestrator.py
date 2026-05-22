@@ -43,6 +43,7 @@ def search(
     provider: EmbeddingProvider,
     query: str,
     top_k: int = 10,
+    corpus: str | None = None,
 ) -> list[SearchResult]:
     """Run a semantic search against the active embedding run.
 
@@ -62,6 +63,7 @@ def search(
         run_id=active.run_id,
         query_vector=query_vec,
         k=top_k,
+        corpus=corpus,
     )
     if not hits:
         return []

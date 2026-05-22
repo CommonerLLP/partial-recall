@@ -508,6 +508,7 @@ class VectorStore:
         run_id: int,
         query_vector: bytes,
         k: int = 10,
+        corpus: str | None = None,
     ) -> list[SearchHit]:
         """Brute-force top-K cosine similarity over int8-quantized vectors.
 
@@ -525,14 +526,26 @@ class VectorStore:
 
         results: list[tuple[float, int]] = []
 
-        cur = self._conn.execute(
-            """
-            SELECT vector_id, chunk_id, vector
-            FROM vectors
-            WHERE run_id = ?
-            """,
-            (run_id,),
-        )
+        if corpus is not None:
+            cur = self._conn.execute(
+                """
+                SELECT v.vector_id, v.chunk_id, v.vector
+                FROM vectors v
+                JOIN chunks c ON c.chunk_id = v.chunk_id
+                WHERE v.run_id = ?
+                  AND c.corpus = ?
+                """,
+                (run_id, corpus),
+            )
+        else:
+            cur = self._conn.execute(
+                """
+                SELECT vector_id, chunk_id, vector
+                FROM vectors
+                WHERE run_id = ?
+                """,
+                (run_id,),
+            )
         while True:
             rows = cur.fetchmany(2048)
             if not rows:
