@@ -47,9 +47,9 @@ SEMANTIC_SEARCH_TOOL: Tool = Tool(
                 "type": "string",
                 "description": (
                     "Optional filter: only search this corpus "
-                    "(e.g., 'zotero', 'folder'). Omit for all."
+                    "(e.g., 'zotero', 'folder', 'markdown_notes'). Omit for all."
                 ),
-                "enum": ["zotero", "folder", "obsidian"],
+                "enum": ["zotero", "folder", "markdown_notes", "jabref", "calibre"],
             },
             "item_types": {
                 "type": "array",
@@ -167,6 +167,7 @@ async def handle_semantic_search(
             provider=provider,
             query=query,
             top_k=top_k,
+            corpus=corpus_filter,
         )
     except PartialRecallError as exc:
         return [TextContent(
@@ -187,12 +188,9 @@ async def handle_semantic_search(
             ),
         )]
 
-    # Post-filter on corpus and min_score (v0.0.1 keeps it simple — the
-    # orchestrator does not yet push these into the SQL layer).
+    # corpus is pre-filtered in the search layer; only min_score remains here.
     filtered: list[SearchResult] = []
     for r in results:
-        if corpus_filter is not None and r.corpus != corpus_filter:
-            continue
         if min_score is not None and r.score < min_score:
             continue
         filtered.append(r)
