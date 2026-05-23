@@ -422,18 +422,20 @@ class VectorStore:
         chunk_index: int,
         chunker_version: str,
         text_hash: str,
-    ) -> int | None:
-        """Locate a chunk by its identity tuple; return chunk_id or None.
+    ) -> tuple[int, str] | None:
+        """Locate a chunk by its identity tuple; return (chunk_id, stored_text_hash) or None.
 
         Identity is the DB unique constraint: (owner, corpus, item_key,
         source_type, source_ref, chunk_index, chunker_version).  text_hash is
-        content, not position — it is intentionally excluded so that a chunk
-        whose source text changed is still found here (and its vector reused
-        rather than triggering a duplicate-key crash on insert).
+        content, not position — it is intentionally excluded from the WHERE
+        clause so that a chunk whose source text changed is still found here.
+
+        The caller receives the stored text_hash so it can detect content
+        drift and call update_chunk_content() if needed.
         """
         row = self._conn.execute(
             """
-            SELECT chunk_id FROM chunks
+            SELECT chunk_id, text_hash FROM chunks
             WHERE owner = 'local'
               AND corpus = ?
               AND item_key = ?
@@ -448,7 +450,24 @@ class VectorStore:
                 chunk_index, chunker_version,
             ),
         ).fetchone()
-        return None if row is None else int(row["chunk_id"])
+        return None if row is None else (int(row["chunk_id"]), str(row["text_hash"]))
+
+    def update_chunk_content(
+        self,
+        *,
+        chunk_id: int,
+        text_hash: str,
+        text_preview: str | None,
+    ) -> None:
+        """Update text_hash and text_preview for an existing chunk.
+
+        Called when a source file's content changes between index runs.
+        The chunks_fts trigger fires automatically to keep FTS in sync.
+        """
+        self._conn.execute(
+            "UPDATE chunks SET text_hash = ?, text_preview = ? WHERE chunk_id = ?",
+            (text_hash, text_preview, chunk_id),
+        )
 
     def vector_exists(self, chunk_id: int, run_id: int) -> bool:
         row = self._conn.execute(

@@ -292,7 +292,8 @@ def run_indexing(
             chunks = chunk_text(text)
             for chunk in chunks:
                 th = _text_hash(chunk.text)
-                chunk_id = store.find_chunk_id(
+                preview = chunk.text[:400] if len(chunk.text) > 400 else chunk.text
+                found = store.find_chunk_id(
                     item_key=item.item_key,
                     corpus=item.corpus,
                     source_type=source.source_type,
@@ -301,8 +302,7 @@ def run_indexing(
                     chunker_version=CHUNKER_VERSION,
                     text_hash=th,
                 )
-                if chunk_id is None:
-                    preview = chunk.text[:400] if len(chunk.text) > 400 else chunk.text
+                if found is None:
                     chunk_id = store.insert_chunk(
                         item_key=item.item_key,
                         corpus=item.corpus,
@@ -318,6 +318,17 @@ def run_indexing(
                         indexed_at=_now_iso(),
                     )
                     chunk_count += 1
+                else:
+                    chunk_id, stored_hash = found
+                    if stored_hash != th:
+                        # Source file content changed — update metadata so
+                        # FTS previews and text_hash stay current. The FTS
+                        # trigger on chunks fires automatically.
+                        store.update_chunk_content(
+                            chunk_id=chunk_id,
+                            text_hash=th,
+                            text_preview=preview,
+                        )
                 # Extend mode: skip chunks that already have a vector in
                 # this run. New-run mode: always embed (vectors table
                 # enforces UNIQUE(chunk_id, run_id); a fresh run never

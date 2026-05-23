@@ -309,6 +309,44 @@ def test_extend_run_id_not_found_raises(store: VectorStore) -> None:
         )
 
 
+def test_new_run_updates_chunk_metadata_when_content_changes(
+    store: VectorStore,
+) -> None:
+    """Regression for #22: when source content changes, a new run must update
+    text_hash and text_preview in the existing chunk row before embedding.
+
+    Without the fix, the chunk row keeps stale text_hash/text_preview while
+    the newly-embedded vector represents the updated text — causing FTS hits
+    and MCP previews to show old content.
+    """
+    first = run_indexing(
+        adapter=_Adapter([("A", "alpha v1 — original content")]),
+        store=store,
+        provider=_Provider(),
+    )
+    # Confirm initial text_hash is stored.
+    row_before = store._conn.execute(
+        "SELECT text_hash, text_preview FROM chunks WHERE item_key LIKE '%A%' LIMIT 1"
+    ).fetchone()
+    assert row_before is not None
+    hash_before = row_before["text_hash"]
+
+    # Start a new run (not extend) with updated content.
+    run_indexing(
+        adapter=_Adapter([("A", "alpha v2 — updated content")]),
+        store=store,
+        provider=_Provider(),
+    )
+    row_after = store._conn.execute(
+        "SELECT text_hash, text_preview FROM chunks WHERE item_key LIKE '%A%' LIMIT 1"
+    ).fetchone()
+    assert row_after is not None
+    # text_hash must reflect the new content.
+    assert row_after["text_hash"] != hash_before
+    # text_preview must also be updated.
+    assert "v2" in (row_after["text_preview"] or "")
+
+
 def test_extend_survives_chunk_text_hash_mismatch(store: VectorStore) -> None:
     """Regression: extending a run where a chunk's text changed between the
     original index and the top-up must not raise IntegrityError.
