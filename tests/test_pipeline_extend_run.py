@@ -319,7 +319,7 @@ def test_new_run_updates_chunk_metadata_when_content_changes(
     the newly-embedded vector represents the updated text — causing FTS hits
     and MCP previews to show old content.
     """
-    first = run_indexing(
+    run_indexing(
         adapter=_Adapter([("A", "alpha v1 — original content")]),
         store=store,
         provider=_Provider(),
