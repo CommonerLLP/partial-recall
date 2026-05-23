@@ -126,18 +126,41 @@ class FolderAdapter:
     def get_sources(self, item: Item) -> Iterator[Source]:
         if not item.corpus_ref:
             return
+        abs_path = Path(item.corpus_ref)
+        # Emit a POSIX-relative path so source_ref is portable across
+        # machines and folder moves.  Fall back to the absolute path only
+        # if the file does not sit under any configured root (shouldn't
+        # happen in normal operation, but guards against edge cases).
+        rel: str | None = None
+        for root in self.roots:
+            try:
+                rel = abs_path.relative_to(root).as_posix()
+                break
+            except ValueError:
+                continue
         yield Source(
             source_type="file",
-            source_ref=item.corpus_ref,
+            source_ref=rel if rel is not None else str(abs_path),
             kind=ItemKind.TEXT,
         )
+
+    def _resolve_source_ref(self, source_ref: str) -> Path | None:
+        """Return an absolute Path for source_ref (relative or legacy absolute)."""
+        p = Path(source_ref)
+        if p.is_absolute():
+            return p if p.exists() else None
+        for root in self.roots:
+            candidate = root / p
+            if candidate.exists():
+                return candidate
+        return None
 
     def get_text(self, item: Item, source: Source) -> str | None:
         if source.source_type != "file" or not source.source_ref:
             return None
-        path = Path(source.source_ref)
-        if not path.exists():
-            log.warning("folder.adapter.missing_file", path=str(path))
+        path = self._resolve_source_ref(source.source_ref)
+        if path is None:
+            log.warning("folder.adapter.missing_file", source_ref=source.source_ref)
             return None
         ext = path.suffix.lower()
         if ext in _PDF_EXTENSIONS:
