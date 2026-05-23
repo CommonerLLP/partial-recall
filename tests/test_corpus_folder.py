@@ -9,6 +9,7 @@ import pytest
 
 from partial_recall.corpus.adapters._shared import stable_item_key as _stable_item_key
 from partial_recall.corpus.adapters.folder import FolderAdapter
+from partial_recall.corpus.types import ItemKind, Source
 from partial_recall.errors import CorpusUnavailableError
 
 
@@ -241,7 +242,6 @@ def test_get_text_works_with_absolute_legacy_source_ref(
     """
     item = next(i for i in adapter.list_items() if i.title == "caste")
     abs_source = item.corpus_ref  # absolute path, as stored in old DB rows
-    from partial_recall.corpus.types import Source, ItemKind
     legacy_source = Source(
         source_type="file",
         source_ref=abs_source,
