@@ -292,7 +292,8 @@ def run_indexing(
             chunks = chunk_text(text)
             for chunk in chunks:
                 th = _text_hash(chunk.text)
-                chunk_id = store.find_chunk_id(
+                preview = chunk.text[:400] if len(chunk.text) > 400 else chunk.text
+                found = store.find_chunk_id(
                     item_key=item.item_key,
                     corpus=item.corpus,
                     source_type=source.source_type,
@@ -301,8 +302,8 @@ def run_indexing(
                     chunker_version=CHUNKER_VERSION,
                     text_hash=th,
                 )
-                if chunk_id is None:
-                    preview = chunk.text[:400] if len(chunk.text) > 400 else chunk.text
+                content_changed = False
+                if found is None:
                     chunk_id = store.insert_chunk(
                         item_key=item.item_key,
                         corpus=item.corpus,
@@ -318,6 +319,9 @@ def run_indexing(
                         indexed_at=_now_iso(),
                     )
                     chunk_count += 1
+                else:
+                    chunk_id, stored_hash = found
+                    content_changed = stored_hash != th
                 # Extend mode: skip chunks that already have a vector in
                 # this run. New-run mode: always embed (vectors table
                 # enforces UNIQUE(chunk_id, run_id); a fresh run never
@@ -325,6 +329,15 @@ def run_indexing(
                 if extended and store.vector_exists(chunk_id, run_id):
                     skipped_chunk_count += 1
                     continue
+                # Defer metadata update until here — only update when we are
+                # about to re-embed, so chunk text_hash/preview stays in sync
+                # with the vector that will be written.
+                if content_changed:
+                    store.update_chunk_content(
+                        chunk_id=chunk_id,
+                        text_hash=th,
+                        text_preview=preview,
+                    )
                 pending.append((chunk_id, chunk.text))
                 if len(pending) >= batch_size:
                     flush_pending()
