@@ -9,6 +9,7 @@ import pytest
 
 from partial_recall.corpus.adapters._shared import stable_item_key as _stable_item_key
 from partial_recall.corpus.adapters.folder import FolderAdapter
+from partial_recall.corpus.types import ItemKind, Source
 from partial_recall.errors import CorpusUnavailableError
 
 
@@ -207,8 +208,9 @@ def test_get_text_returns_none_for_missing_file(
 ) -> None:
     item = next(i for i in adapter.list_items() if i.title == "caste")
     source = next(adapter.get_sources(item))
-    # Delete underneath us, then retry get_text.
-    Path(source.source_ref).unlink()
+    # source_ref is now "{root_idx}:{rel_posix}" — strip the prefix before resolving.
+    _, _, rel = source.source_ref.partition(":")
+    (corpus_root / rel).unlink()
     assert adapter.get_text(item, source) is None
 
 
@@ -216,3 +218,36 @@ def test_metadata_hash_stable_per_run(adapter: FolderAdapter) -> None:
     first = {item.item_key: item.metadata_hash for item in adapter.list_items()}
     second = {item.item_key: item.metadata_hash for item in adapter.list_items()}
     assert first == second
+
+
+def test_source_ref_is_relative(adapter: FolderAdapter) -> None:
+    """source_ref must be a POSIX-relative path, not an absolute path.
+
+    Absolute paths are machine-specific and break portable/collaborative
+    indices when the folder moves or the repo is cloned elsewhere (issue #23).
+    """
+    for item in adapter.list_items():
+        for source in adapter.get_sources(item):
+            assert not Path(source.source_ref).is_absolute(), (
+                f"source_ref should be relative, got: {source.source_ref!r}"
+            )
+
+
+def test_get_text_works_with_absolute_legacy_source_ref(
+    corpus_root: Path, adapter: FolderAdapter
+) -> None:
+    """get_text must still work when source_ref is an absolute path.
+
+    Rows indexed before fix #23 carry absolute paths in the DB. The
+    adapter must handle them as a backwards-compatible fallback.
+    """
+    item = next(i for i in adapter.list_items() if i.title == "caste")
+    abs_source = item.corpus_ref  # absolute path, as stored in old DB rows
+    legacy_source = Source(
+        source_type="file",
+        source_ref=abs_source,
+        kind=ItemKind.TEXT,
+    )
+    text = adapter.get_text(item, legacy_source)
+    assert text is not None
+    assert "caste" in text.lower()

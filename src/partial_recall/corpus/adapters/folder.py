@@ -126,18 +126,63 @@ class FolderAdapter:
     def get_sources(self, item: Item) -> Iterator[Source]:
         if not item.corpus_ref:
             return
+        abs_path = Path(item.corpus_ref)
+        # Emit "{root_idx}:{rel_posix}" so source_ref is portable and
+        # unambiguous even with multiple roots that share filenames.
+        # The root_idx prefix encodes which configured root owns this file,
+        # avoiding the wrong-root ambiguity flagged in issue #23.
+        # Fall back to the absolute path only for files that fall outside
+        # every configured root (edge case; shouldn't happen in normal use).
+        for idx, root in enumerate(self.roots):
+            try:
+                rel = abs_path.relative_to(root).as_posix()
+                yield Source(
+                    source_type="file",
+                    source_ref=f"{idx}:{rel}",
+                    kind=ItemKind.TEXT,
+                )
+                return
+            except ValueError:
+                continue
         yield Source(
             source_type="file",
-            source_ref=item.corpus_ref,
+            source_ref=str(abs_path),
             kind=ItemKind.TEXT,
         )
+
+    def _resolve_source_ref(self, source_ref: str) -> Path | None:
+        """Return an absolute Path for source_ref.
+
+        Accepts three formats:
+        - "{root_idx}:{rel_posix}"  — new portable format (issue #23)
+        - absolute path             — legacy rows indexed before this fix
+        - bare relative path        — intermediate format (should not occur
+                                      in production, but handled defensively)
+        """
+        p = Path(source_ref)
+        if p.is_absolute():
+            return p if p.exists() else None
+        # Try new "{idx}:{rel}" format.
+        if ":" in source_ref:
+            idx_str, _, rel = source_ref.partition(":")
+            if idx_str.isdigit():
+                idx = int(idx_str)
+                if idx < len(self.roots):
+                    candidate = self.roots[idx] / rel
+                    return candidate if candidate.exists() else None
+        # Bare relative path — scan all roots (defensive fallback).
+        for root in self.roots:
+            candidate = root / source_ref
+            if candidate.exists():
+                return candidate
+        return None
 
     def get_text(self, item: Item, source: Source) -> str | None:
         if source.source_type != "file" or not source.source_ref:
             return None
-        path = Path(source.source_ref)
-        if not path.exists():
-            log.warning("folder.adapter.missing_file", path=str(path))
+        path = self._resolve_source_ref(source.source_ref)
+        if path is None:
+            log.warning("folder.adapter.missing_file", source_ref=source.source_ref)
             return None
         ext = path.suffix.lower()
         if ext in _PDF_EXTENSIONS:
