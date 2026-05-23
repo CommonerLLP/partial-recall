@@ -107,12 +107,12 @@ LIBRARY_SEARCH_TOOL: Tool = Tool(
 )
 
 _SORT_MAP = {
-    "year_desc":   "CAST(SUBSTR(date_val, 1, 4) AS INTEGER) DESC NULLS LAST, i.dateAdded DESC",
-    "year_asc":    "CAST(SUBSTR(date_val, 1, 4) AS INTEGER) ASC NULLS LAST, i.dateAdded ASC",
-    "title_asc":   "LOWER(title_val) ASC NULLS LAST",
-    "title_desc":  "LOWER(title_val) DESC NULLS LAST",
-    "added_desc":  "i.dateAdded DESC",
-    "added_asc":   "i.dateAdded ASC",
+    "year_desc":   "CAST(SUBSTR(COALESCE(date_val, ''), 1, 4) AS INTEGER) DESC, dateAdded DESC",
+    "year_asc":    "CAST(SUBSTR(COALESCE(date_val, ''), 1, 4) AS INTEGER) ASC, dateAdded ASC",
+    "title_asc":   "LOWER(COALESCE(title_val, '')) ASC",
+    "title_desc":  "LOWER(COALESCE(title_val, '')) DESC",
+    "added_desc":  "dateAdded DESC",
+    "added_asc":   "dateAdded ASC",
 }
 
 _YEAR_RE = re.compile(r"^\d{4}")
@@ -299,41 +299,66 @@ def _run_library_search(
     where_sql = " AND ".join(where)
     order_sql = _SORT_MAP.get(sort_by, _SORT_MAP["year_desc"])
 
-    # Pull itemID, key, typeName, dateAdded plus title/date via subqueries.
+    # Year range: filter in SQL so LIMIT applies to post-filter rows.
+    # We wrap the item query as a subquery so date_val is available in WHERE.
+    year_where: list[str] = []
+    year_params: list[Any] = []
+    if year_min is not None:
+        year_where.append(
+            "CAST(SUBSTR(COALESCE(date_val, ''), 1, 4) AS INTEGER) >= ?"
+        )
+        year_params.append(year_min)
+    if year_max is not None:
+        year_where.append(
+            "(date_val IS NULL"
+            " OR CAST(SUBSTR(date_val, 1, 4) AS INTEGER) <= ?)"
+        )
+        year_params.append(year_max)
+    year_filter_sql = ("WHERE " + " AND ".join(year_where)) if year_where else ""
+
+    # pub_sub uses a correlated subquery so each item gets its own
+    # publication value — the previous LIMIT 1 was unscoped and returned
+    # publication metadata for at most one item in the entire result set.
     sql = f"""
-        SELECT
-            i.itemID,
-            i.key,
-            it.typeName,
-            i.dateAdded,
-            title_sub.value  AS title_val,
-            date_sub.value   AS date_val,
-            pub_sub.value    AS publication_val
-        FROM items i
-        JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
-        LEFT JOIN (
-            SELECT d.itemID, v.value FROM itemData d
-            JOIN fields f ON f.fieldID = d.fieldID
-            JOIN itemDataValues v ON v.valueID = d.valueID
-            WHERE f.fieldName = 'title'
-        ) title_sub ON title_sub.itemID = i.itemID
-        LEFT JOIN (
-            SELECT d.itemID, v.value FROM itemData d
-            JOIN fields f ON f.fieldID = d.fieldID
-            JOIN itemDataValues v ON v.valueID = d.valueID
-            WHERE f.fieldName = 'date'
-        ) date_sub ON date_sub.itemID = i.itemID
-        LEFT JOIN (
-            SELECT d.itemID, v.value FROM itemData d
-            JOIN fields f ON f.fieldID = d.fieldID
-            JOIN itemDataValues v ON v.valueID = d.valueID
-            WHERE f.fieldName IN ('publicationTitle', 'publisher', 'university')
-            LIMIT 1
-        ) pub_sub ON pub_sub.itemID = i.itemID
-        WHERE {where_sql}
+        SELECT * FROM (
+            SELECT
+                i.itemID,
+                i.key,
+                it.typeName,
+                i.dateAdded,
+                title_sub.value AS title_val,
+                date_sub.value  AS date_val,
+                (
+                    SELECT v.value FROM itemData d
+                    JOIN fields f ON f.fieldID = d.fieldID
+                    JOIN itemDataValues v ON v.valueID = d.valueID
+                    WHERE d.itemID = i.itemID
+                      AND f.fieldName IN (
+                          'publicationTitle', 'publisher', 'university'
+                      )
+                    LIMIT 1
+                ) AS publication_val
+            FROM items i
+            JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
+            LEFT JOIN (
+                SELECT d.itemID, v.value FROM itemData d
+                JOIN fields f ON f.fieldID = d.fieldID
+                JOIN itemDataValues v ON v.valueID = d.valueID
+                WHERE f.fieldName = 'title'
+            ) title_sub ON title_sub.itemID = i.itemID
+            LEFT JOIN (
+                SELECT d.itemID, v.value FROM itemData d
+                JOIN fields f ON f.fieldID = d.fieldID
+                JOIN itemDataValues v ON v.valueID = d.valueID
+                WHERE f.fieldName = 'date'
+            ) date_sub ON date_sub.itemID = i.itemID
+            WHERE {where_sql}
+        ) inner_q
+        {year_filter_sql}
         ORDER BY {order_sql}
         LIMIT ?
     """
+    params.extend(year_params)
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
@@ -351,14 +376,6 @@ def _run_library_search(
         date_val = r["date_val"] or ""
         m = _YEAR_RE.match(date_val)
         year = int(m.group()) if m else None
-
-        # Year range filter — applied here because SQLite CAST on a
-        # potentially-absent LEFT JOIN column is fragile in WHERE.
-        if year_min is not None and (year is None or year < year_min):
-            continue
-        if year_max is not None and (year is None or year > year_max):
-            continue
-
         results.append({
             "item_key": r["key"],
             "item_type": r["typeName"],

@@ -336,6 +336,31 @@ async def test_missing_db_returns_error(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_publication_populated_for_all_items(zotero_db: Path) -> None:
+    """pub_sub must return publication for every item, not just one."""
+    out = await _call({}, zotero_db)
+    pubs = {r["item_key"]: r["publication"] for r in out["results"]}
+    # All four items have a publicationTitle set in the fixture.
+    assert all(v is not None for v in pubs.values()), (
+        f"Some items missing publication: {pubs}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_year_filter_not_cut_by_limit(zotero_db: Path) -> None:
+    """Year filtering must happen before LIMIT, not after.
+
+    With limit=1 and year_max=1990, the highest-year item (2020) must be
+    excluded by the year filter before limit is applied — not fetched first
+    and then silently dropped, which would return 0 results.
+    """
+    # Items with year <= 1990: item2 (1945) and item4 (1990).
+    out = await _call({"year_max": 1990, "limit": 1}, zotero_db)
+    assert out["total"] == 1
+    assert out["results"][0]["year"] <= 1990
+
+
+@pytest.mark.asyncio
 async def test_combined_filters(zotero_db: Path) -> None:
     # caste tag + book type → item2 and item4; then year_max=1950 → only item2
     out = await _call(
