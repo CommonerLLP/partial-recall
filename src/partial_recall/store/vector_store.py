@@ -423,7 +423,14 @@ class VectorStore:
         chunker_version: str,
         text_hash: str,
     ) -> int | None:
-        """Locate a chunk by its identity tuple; return chunk_id or None."""
+        """Locate a chunk by its identity tuple; return chunk_id or None.
+
+        Identity is the DB unique constraint: (owner, corpus, item_key,
+        source_type, source_ref, chunk_index, chunker_version).  text_hash is
+        content, not position — it is intentionally excluded so that a chunk
+        whose source text changed is still found here (and its vector reused
+        rather than triggering a duplicate-key crash on insert).
+        """
         row = self._conn.execute(
             """
             SELECT chunk_id FROM chunks
@@ -434,12 +441,11 @@ class VectorStore:
               AND (source_ref IS ? OR source_ref = ?)
               AND chunk_index = ?
               AND chunker_version = ?
-              AND text_hash = ?
             LIMIT 1
             """,
             (
                 corpus, item_key, source_type, source_ref, source_ref,
-                chunk_index, chunker_version, text_hash,
+                chunk_index, chunker_version,
             ),
         ).fetchone()
         return None if row is None else int(row["chunk_id"])

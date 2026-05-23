@@ -307,3 +307,34 @@ def test_extend_run_id_not_found_raises(store: VectorStore) -> None:
             store=store, provider=_Provider(),
             extend_run_id=999,
         )
+
+
+def test_extend_survives_chunk_text_hash_mismatch(store: VectorStore) -> None:
+    """Regression: extending a run where a chunk's text changed between the
+    original index and the top-up must not raise IntegrityError.
+
+    Scenario: item A was indexed from path-v1 (text "alpha v1"). The source
+    file is later regenerated with slightly different content ("alpha v2").
+    find_chunk_id previously required text_hash to match, returned None for
+    the updated text, and then insert_chunk crashed the UNIQUE constraint.
+    The fix: find_chunk_id looks up by position (the unique constraint fields)
+    only; text_hash is content, not identity.
+    """
+    first = run_indexing(
+        adapter=_Adapter([("A", "alpha v1")]),
+        store=store,
+        provider=_Provider(),
+    )
+    # Now extend with the same item but updated text ("alpha v2").
+    # This simulates a regenerated source file — same position, different hash.
+    provider2 = _Provider()
+    result = run_indexing(
+        adapter=_Adapter([("A", "alpha v2")]),
+        store=store,
+        provider=provider2,
+        extend_run_id=first.run_id,
+    )
+    assert result.extended is True
+    # The chunk already has a vector in this run → skipped, not re-embedded.
+    assert result.skipped_chunk_count >= 1
+    assert provider2.total_embedded == 0
