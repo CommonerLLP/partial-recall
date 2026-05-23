@@ -208,8 +208,9 @@ def test_get_text_returns_none_for_missing_file(
 ) -> None:
     item = next(i for i in adapter.list_items() if i.title == "caste")
     source = next(adapter.get_sources(item))
-    # source_ref is now a relative path — resolve against the root to delete.
-    (corpus_root / source.source_ref).unlink()
+    # source_ref is now "{root_idx}:{rel_posix}" — strip the prefix before resolving.
+    _, _, rel = source.source_ref.partition(":")
+    (corpus_root / rel).unlink()
     assert adapter.get_text(item, source) is None
 
 

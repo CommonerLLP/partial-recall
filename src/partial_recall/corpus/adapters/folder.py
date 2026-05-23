@@ -127,30 +127,52 @@ class FolderAdapter:
         if not item.corpus_ref:
             return
         abs_path = Path(item.corpus_ref)
-        # Emit a POSIX-relative path so source_ref is portable across
-        # machines and folder moves.  Fall back to the absolute path only
-        # if the file does not sit under any configured root (shouldn't
-        # happen in normal operation, but guards against edge cases).
-        rel: str | None = None
-        for root in self.roots:
+        # Emit "{root_idx}:{rel_posix}" so source_ref is portable and
+        # unambiguous even with multiple roots that share filenames.
+        # The root_idx prefix encodes which configured root owns this file,
+        # avoiding the wrong-root ambiguity flagged in issue #23.
+        # Fall back to the absolute path only for files that fall outside
+        # every configured root (edge case; shouldn't happen in normal use).
+        for idx, root in enumerate(self.roots):
             try:
                 rel = abs_path.relative_to(root).as_posix()
-                break
+                yield Source(
+                    source_type="file",
+                    source_ref=f"{idx}:{rel}",
+                    kind=ItemKind.TEXT,
+                )
+                return
             except ValueError:
                 continue
         yield Source(
             source_type="file",
-            source_ref=rel if rel is not None else str(abs_path),
+            source_ref=str(abs_path),
             kind=ItemKind.TEXT,
         )
 
     def _resolve_source_ref(self, source_ref: str) -> Path | None:
-        """Return an absolute Path for source_ref (relative or legacy absolute)."""
+        """Return an absolute Path for source_ref.
+
+        Accepts three formats:
+        - "{root_idx}:{rel_posix}"  — new portable format (issue #23)
+        - absolute path             — legacy rows indexed before this fix
+        - bare relative path        — intermediate format (should not occur
+                                      in production, but handled defensively)
+        """
         p = Path(source_ref)
         if p.is_absolute():
             return p if p.exists() else None
+        # Try new "{idx}:{rel}" format.
+        if ":" in source_ref:
+            idx_str, _, rel = source_ref.partition(":")
+            if idx_str.isdigit():
+                idx = int(idx_str)
+                if idx < len(self.roots):
+                    candidate = self.roots[idx] / rel
+                    return candidate if candidate.exists() else None
+        # Bare relative path — scan all roots (defensive fallback).
         for root in self.roots:
-            candidate = root / p
+            candidate = root / source_ref
             if candidate.exists():
                 return candidate
         return None
