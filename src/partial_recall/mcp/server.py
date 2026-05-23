@@ -12,6 +12,7 @@ store + provider and calls `run_stdio`.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import mcp.server.stdio
@@ -22,6 +23,10 @@ from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.mcp.tools.get_item_details import (
     GET_ITEM_DETAILS_TOOL,
     handle_get_item_details,
+)
+from partial_recall.mcp.tools.library_search import (
+    LIBRARY_SEARCH_TOOL,
+    handle_library_search,
 )
 from partial_recall.mcp.tools.list_collections import (
     LIST_COLLECTIONS_TOOL,
@@ -46,6 +51,7 @@ def build_server(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
+    zotero_sqlite_path: Path | None = None,
 ) -> Server:
     """Construct a configured MCP Server.
 
@@ -62,6 +68,7 @@ def build_server(
             SEMANTIC_STATUS_TOOL,
             GET_ITEM_DETAILS_TOOL,
             LIST_COLLECTIONS_TOOL,
+            LIBRARY_SEARCH_TOOL,
         ]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
@@ -77,6 +84,8 @@ def build_server(
             return await handle_get_item_details(args, store=store)
         if name == LIST_COLLECTIONS_TOOL.name:
             return await handle_list_collections(args, store=store)
+        if name == LIBRARY_SEARCH_TOOL.name:
+            return await handle_library_search(args, zotero_sqlite_path=zotero_sqlite_path)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
         return [TextContent(
@@ -95,9 +104,10 @@ async def run_stdio(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
+    zotero_sqlite_path: Path | None = None,
 ) -> None:
     """Run the MCP server over stdio. Blocks until the client disconnects."""
-    server = build_server(store=store, provider=provider)
+    server = build_server(store=store, provider=provider, zotero_sqlite_path=zotero_sqlite_path)
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
