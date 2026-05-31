@@ -32,6 +32,10 @@ from partial_recall.mcp.tools.list_collections import (
     LIST_COLLECTIONS_TOOL,
     handle_list_collections,
 )
+from partial_recall.mcp.tools.place_item import (
+    PLACE_ITEM_TOOL,
+    handle_place_item,
+)
 from partial_recall.mcp.tools.search_fulltext import (
     SEARCH_FULLTEXT_TOOL,
     handle_search_fulltext,
@@ -43,6 +47,10 @@ from partial_recall.mcp.tools.semantic_search import (
 from partial_recall.mcp.tools.semantic_status import (
     SEMANTIC_STATUS_TOOL,
     handle_semantic_status,
+)
+from partial_recall.mcp.tools.whats_new import (
+    WHATS_NEW_TOOL,
+    handle_whats_new,
 )
 from partial_recall.store.vector_store import VectorStore
 
@@ -69,6 +77,8 @@ def build_server(
             GET_ITEM_DETAILS_TOOL,
             LIST_COLLECTIONS_TOOL,
             LIBRARY_SEARCH_TOOL,
+            PLACE_ITEM_TOOL,
+            WHATS_NEW_TOOL,
         ]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
@@ -86,6 +96,10 @@ def build_server(
             return await handle_list_collections(args, store=store)
         if name == LIBRARY_SEARCH_TOOL.name:
             return await handle_library_search(args, zotero_sqlite_path=zotero_sqlite_path)
+        if name == PLACE_ITEM_TOOL.name:
+            return await handle_place_item(args, store=store, provider=provider)
+        if name == WHATS_NEW_TOOL.name:
+            return await handle_whats_new(args, store=store, provider=provider)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
         return [TextContent(

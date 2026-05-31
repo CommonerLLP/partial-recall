@@ -1,0 +1,20 @@
+{
+  "_comment": "Registry of academic presses to track for new releases. Expand freely. Each press has a `source` saying HOW to pull its new titles: type 'crossref' (works for presses that deposit book DOIs) or type 'catalogue' (the press's own new/forthcoming page — needs a per-press fetch adapter; url given). Coverage probed 2026-05-30: Crossref carries Routledge/Oxford/Cambridge/Duke/Cornell/California books; Stanford/Princeton/Harvard/Chicago/Columbia/Yale/Minnesota/MIT deposit no book DOIs and need their own catalogue.",
+  "presses": [
+    {"name": "Stanford University Press", "short": "stanford", "country": "USA", "crossref_match": ["Stanford University Press"], "source": {"type": "catalogue", "url": "https://www.sup.org/books/series/south-asia-motion", "note": "LoC SRU has no publisher index; sup.org South Asia in Motion series = Stanford's South Asia anthropology/history list, read via jina"}},
+    {"name": "Princeton University Press", "short": "princeton", "country": "USA", "crossref_match": ["Princeton University Press"], "source": {"type": "catalogue", "url": "https://press.princeton.edu/subjects/asian-studies"}},
+    {"name": "Harvard University Press", "short": "harvard", "country": "USA", "crossref_match": ["Harvard University Press"], "source": {"type": "catalogue", "url": "https://www.hup.harvard.edu/results-list.php?subject=ASN"}},
+    {"name": "University of Chicago Press", "short": "chicago", "country": "USA", "crossref_match": ["University of Chicago Press", "Chicago Press"], "source": {"type": "catalogue", "url": "https://press.uchicago.edu/ucp/books/subject/su36.html"}},
+    {"name": "Columbia University Press", "short": "columbia", "country": "USA", "crossref_match": ["Columbia University Press"], "source": {"type": "catalogue", "url": "https://cup.columbia.edu/subject/asian-studies"}},
+    {"name": "Yale University Press", "short": "yale", "country": "USA", "crossref_match": ["Yale University Press"], "source": {"type": "catalogue", "url": "https://yalebooks.yale.edu/subject/asian-studies/"}},
+    {"name": "University of Minnesota Press", "short": "minnesota", "country": "USA", "crossref_match": ["University of Minnesota Press", "Minnesota Press"], "source": {"type": "catalogue", "url": "https://www.upress.umn.edu/"}},
+    {"name": "MIT Press", "short": "mit", "country": "USA", "crossref_match": ["MIT Press"], "source": {"type": "catalogue", "url": "https://mitpress.mit.edu/"}},
+
+    {"name": "Duke University Press", "short": "duke", "country": "USA", "crossref_match": ["Duke University Press"], "source": {"type": "crossref"}},
+    {"name": "University of California Press", "short": "california", "country": "USA", "crossref_match": ["University of California Press"], "source": {"type": "crossref"}},
+    {"name": "Cornell University Press", "short": "cornell", "country": "USA", "crossref_match": ["Cornell University Press"], "source": {"type": "crossref"}},
+    {"name": "Cambridge University Press", "short": "cambridge", "country": "UK", "crossref_match": ["Cambridge University Press"], "source": {"type": "crossref"}},
+    {"name": "Oxford University Press", "short": "oxford", "country": "UK", "crossref_match": ["Oxford University Press"], "source": {"type": "crossref"}},
+    {"name": "Routledge", "short": "routledge", "country": "UK", "crossref_match": ["Routledge", "Taylor & Francis"], "source": {"type": "crossref"}}
+  ]
+}

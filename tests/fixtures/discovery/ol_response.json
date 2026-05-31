@@ -1,0 +1,20 @@
+{
+  "numFound": 2,
+  "docs": [
+    {
+      "title": "Dalit Studies",
+      "author_name": ["Ramnarayan S. Rawat", "K. Satyanarayana"],
+      "first_publish_year": 2016,
+      "publisher": ["Duke University Press"],
+      "subject": ["Dalits", "Caste", "India", "Social conditions"],
+      "lccn": ["2015045123"]
+    },
+    {
+      "title": "Brand New Nation",
+      "author_name": ["Ravinder Kaur"],
+      "first_publish_year": 2020,
+      "publisher": ["Stanford University Press"],
+      "subject": ["Nationalism", "Capitalism", "India"]
+    }
+  ]
+}
