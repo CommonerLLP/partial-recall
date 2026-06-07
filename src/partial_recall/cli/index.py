@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Protocol
 
 import typer
 from rich.console import Console
@@ -18,16 +20,12 @@ from rich.progress import (
 
 from partial_recall.config.loader import load_config
 from partial_recall.config.models import EmbeddingProviderName
-from partial_recall.corpus.adapters.calibre import CalibreAdapter
-from partial_recall.corpus.adapters.folder import FolderAdapter
-from partial_recall.corpus.adapters.jabref import JabRefAdapter
-from partial_recall.corpus.adapters.markdown_notes import MarkdownNotesAdapter
-from partial_recall.corpus.adapters.zotero import ZoteroAdapter
+from partial_recall.corpus.protocol import CorpusAdapter
+from partial_recall.corpus.registry import BUILTIN_ADAPTER_NAMES, create_adapter
 from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.errors import (
     ConfigError,
-    CorpusUnavailableError,
     PartialRecallError,
 )
 from partial_recall.extract.pdf_noise import PypdfNoiseFilter
@@ -45,8 +43,14 @@ def _truncate_title(title: str | None, fallback: str, width: int = 60) -> str:
 console = Console()
 
 
+class _ZoteroCollectionsAdapter(Protocol):
+    def list_zotero_collections(self) -> Iterator[dict]: ...
+
+    def list_collection_memberships(self) -> Iterator[dict]: ...
+
+
 def _sync_zotero_collections(
-    adapter: ZoteroAdapter, store: VectorStore
+    adapter: _ZoteroCollectionsAdapter, store: VectorStore
 ) -> None:
     """Mirror Zotero's collections + memberships into our store.
 
@@ -131,7 +135,11 @@ def index_command(
     source: str = typer.Option(  # noqa: B008
         "zotero",
         "--source",
-        help="Corpus adapter: 'zotero', 'folder', 'markdown_notes', 'jabref', or 'calibre'.",
+        help=(
+            "Corpus adapter. Built-ins: "
+            + ", ".join(BUILTIN_ADAPTER_NAMES)
+            + ". Or use a dotted path like package.module:AdapterClass."
+        ),
     ),
     extend: bool = typer.Option(  # noqa: B008
         False,
@@ -175,66 +183,8 @@ def index_command(
         )
     cfg = load_config(cfg_path)
 
-    if source not in {"zotero", "folder", "markdown_notes", "jabref", "calibre"}:
-        raise PartialRecallError(
-            f"Source {source!r} not supported. "
-            "Use 'zotero', 'folder', 'markdown_notes', 'jabref', or 'calibre'."
-        )
-    if source == "zotero":
-        if not cfg.zotero.enabled:
-            raise PartialRecallError(
-                "Zotero source is disabled in config. "
-                "Set [zotero] enabled = true and re-run."
-            )
-        if not cfg.zotero.sqlite_path.exists():
-            raise CorpusUnavailableError(
-                f"Zotero DB not found at {cfg.zotero.sqlite_path}. "
-                "Check your config or re-run `partial-recall init`."
-            )
-    elif source == "folder":
-        if not cfg.folder.enabled:
-            raise PartialRecallError(
-                "Folder source is disabled in config. "
-                "Set [folder] enabled = true and configure [folder] paths = [...]."
-            )
-        if not cfg.folder.paths:
-            raise PartialRecallError(
-                "Folder source has no paths configured. "
-                "Set [folder] paths = ['/path/to/your/library/']."
-            )
-    elif source == "markdown_notes":
-        if not cfg.markdown_notes.enabled:
-            raise PartialRecallError(
-                "Markdown notes source is disabled in config. "
-                "Set [markdown_notes] enabled = true and notes_path = '/path/to/your/notes'."
-            )
-        if not cfg.markdown_notes.notes_path:
-            raise PartialRecallError(
-                "Markdown notes path not configured. "
-                "Set [markdown_notes] notes_path = '/path/to/your/notes'."
-            )
-    elif source == "jabref":
-        if not cfg.jabref.enabled:
-            raise PartialRecallError(
-                "JabRef source is disabled in config. "
-                "Set [jabref] enabled = true and bib_path = '/path/to/library.bib'."
-            )
-        if not cfg.jabref.bib_path:
-            raise PartialRecallError(
-                "JabRef bib_path not configured. "
-                "Set [jabref] bib_path = '/path/to/your/library.bib'."
-            )
-    else:  # calibre
-        if not cfg.calibre.enabled:
-            raise PartialRecallError(
-                "Calibre source is disabled in config. "
-                "Set [calibre] enabled = true and library_path = '/path/to/Calibre Library'."
-            )
-        if not cfg.calibre.library_path:
-            raise PartialRecallError(
-                "Calibre library_path not configured. "
-                "Set [calibre] library_path = '/path/to/your/Calibre Library'."
-            )
+    console.print(f"[bold]Loading corpus adapter:[/bold] {source}")
+    adapter: CorpusAdapter = create_adapter(source, cfg)
 
     console.print(
         f"[bold]Loading embedding provider:[/bold] "
@@ -255,34 +205,6 @@ def index_command(
         )
         progress.remove_task(load_task)
 
-    adapter: ZoteroAdapter | FolderAdapter | MarkdownNotesAdapter | JabRefAdapter | CalibreAdapter
-    if source == "zotero":
-        console.print(f"[bold]Opening Zotero:[/bold] {cfg.zotero.sqlite_path}")
-        adapter = ZoteroAdapter(
-            sqlite_path=cfg.zotero.sqlite_path,
-            storage_path=cfg.zotero.storage_path,
-        )
-    elif source == "folder":
-        console.print(
-            "[bold]Walking folder corpus:[/bold] "
-            + ", ".join(str(p) for p in cfg.folder.paths)
-        )
-        adapter = FolderAdapter(
-            roots=cfg.folder.paths,
-            recursive=cfg.folder.recursive,
-            extensions=frozenset(ext.lower() for ext in cfg.folder.extensions),
-        )
-    elif source == "markdown_notes":
-        console.print(
-            f"[bold]Walking markdown notes:[/bold] {cfg.markdown_notes.notes_path}"
-        )
-        adapter = MarkdownNotesAdapter(notes_path=cfg.markdown_notes.notes_path)
-    elif source == "jabref":
-        console.print(f"[bold]Opening JabRef library:[/bold] {cfg.jabref.bib_path}")
-        adapter = JabRefAdapter(bib_path=cfg.jabref.bib_path)
-    else:  # calibre
-        console.print(f"[bold]Opening Calibre library:[/bold] {cfg.calibre.library_path}")
-        adapter = CalibreAdapter(library_path=cfg.calibre.library_path)
     console.print(f"[bold]Opening vector store:[/bold] {cfg.index.vector_db_path}")
     store = VectorStore(cfg.index.vector_db_path)
 
