@@ -38,6 +38,8 @@ partial-recall init       # hardware-aware wizard; writes config.toml
 partial-recall doctor     # diagnostic checks against your install
 partial-recall index      # builds the vector index from your corpus
 partial-recall search "your query"
+partial-recall fetch <item_key>  # fetch clean reading-order text from an item's attachment
+partial-recall place "title"     # place a candidate work against the existing corpus
 ```
 
 For a step-by-step walkthrough see [docs/walkthrough/five-minute-walkthrough.md](./docs/walkthrough/five-minute-walkthrough.md).
@@ -73,6 +75,7 @@ partial-recall --install-completion
 | **Calibre** | E-book library via `metadata.db`; no Calibre install required |
 | **Markdown notes** | Obsidian, The Archive, Zettlr vaults; YAML frontmatter; `.partial-recallignore` |
 | **JabRef** | BibTeX `.bib` files; abstracts + linked PDFs |
+| **External** | Load custom adapters via dotted import path (e.g. `package.module:AdapterClass`) |
 
 ---
 
@@ -138,7 +141,7 @@ partial-recall serve
 
 Or let your client spawn it automatically — `partial-recall init` prints the JSON snippet to paste into your client's settings.
 
-Available MCP tools: `semantic_search`, `search_fulltext`, `semantic_status`, `get_item_details`, `list_collections`.
+Available MCP tools: `semantic_search`, `search_fulltext`, `semantic_status`, `get_item_details`, `list_collections`, `library_search`, `fetch_item`, `place_item`, `whats_new`.
 
 ---
 
@@ -213,7 +216,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
 
 **What's next:**
-- Structured metadata search (`library_search` MCP tool — filter by author, tag, collection, year)
 - Faiss accelerator for faster semantic search on large corpora
 - Independent verification of multilingual retrieval quality across Tamil, Hindi, Bengali, Urdu, Persian, Arabic
 - Better chunking for non-Latin scripts
