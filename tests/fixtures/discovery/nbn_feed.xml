@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>New Books in South Asian Studies</title>
+    <item>
+      <title>Navyug Gill, "Labors of Division: Global Capitalism and the Emergence of the Peasant in Colonial Panjab" (Stanford UP, 2024)</title>
+      <description>&lt;p&gt;A radical history of the concept of "the peasant" in colonial Panjab.&lt;/p&gt;</description>
+      <pubDate>Tue, 14 Jan 2025 08:00:00 -0000</pubDate>
+    </item>
+    <item>
+      <title>Srirupa Roy, "The Political Outsider: Indian Democracy and the Lineages of Populism" (Stanford UP, 2024)</title>
+      <description>Curative democracy and the political outsider from the 1970s Emergency to Modi.</description>
+      <pubDate>Fri, 03 Jan 2025 08:00:00 -0000</pubDate>
+    </item>
+    <item>
+      <title>Democracy Dialogues: India's 2026 State Elections</title>
+      <description>A discussion episode, not a book review — should be skipped by the parser.</description>
+      <pubDate>Fri, 29 May 2026 08:00:00 -0000</pubDate>
+    </item>
+  </channel>
+</rss>

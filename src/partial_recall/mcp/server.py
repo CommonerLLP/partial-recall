@@ -32,6 +32,14 @@ from partial_recall.mcp.tools.list_collections import (
     LIST_COLLECTIONS_TOOL,
     handle_list_collections,
 )
+from partial_recall.mcp.tools.place_item import (
+    PLACE_ITEM_TOOL,
+    handle_place_item,
+)
+from partial_recall.mcp.tools.fetch_item import (
+    FETCH_ITEM_TOOL,
+    handle_fetch_item,
+)
 from partial_recall.mcp.tools.search_fulltext import (
     SEARCH_FULLTEXT_TOOL,
     handle_search_fulltext,
@@ -44,14 +52,19 @@ from partial_recall.mcp.tools.semantic_status import (
     SEMANTIC_STATUS_TOOL,
     handle_semantic_status,
 )
+from partial_recall.mcp.tools.whats_new import (
+    WHATS_NEW_TOOL,
+    handle_whats_new,
+)
 from partial_recall.store.vector_store import VectorStore
+from partial_recall.config.models import PartialRecallConfig
 
 
 def build_server(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
-    zotero_sqlite_path: Path | None = None,
+    config: PartialRecallConfig,
 ) -> Server:
     """Construct a configured MCP Server.
 
@@ -69,6 +82,9 @@ def build_server(
             GET_ITEM_DETAILS_TOOL,
             LIST_COLLECTIONS_TOOL,
             LIBRARY_SEARCH_TOOL,
+            PLACE_ITEM_TOOL,
+            FETCH_ITEM_TOOL,
+            WHATS_NEW_TOOL,
         ]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
@@ -85,7 +101,13 @@ def build_server(
         if name == LIST_COLLECTIONS_TOOL.name:
             return await handle_list_collections(args, store=store)
         if name == LIBRARY_SEARCH_TOOL.name:
-            return await handle_library_search(args, zotero_sqlite_path=zotero_sqlite_path)
+            return await handle_library_search(args, zotero_sqlite_path=config.zotero.sqlite_path if config.zotero.enabled else None)
+        if name == PLACE_ITEM_TOOL.name:
+            return await handle_place_item(args, store=store, provider=provider)
+        if name == FETCH_ITEM_TOOL.name:
+            return await handle_fetch_item(args, config=config)
+        if name == WHATS_NEW_TOOL.name:
+            return await handle_whats_new(args, store=store, provider=provider)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
         return [TextContent(
@@ -104,10 +126,10 @@ async def run_stdio(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
-    zotero_sqlite_path: Path | None = None,
+    config: PartialRecallConfig,
 ) -> None:
     """Run the MCP server over stdio. Blocks until the client disconnects."""
-    server = build_server(store=store, provider=provider, zotero_sqlite_path=zotero_sqlite_path)
+    server = build_server(store=store, provider=provider, config=config)
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

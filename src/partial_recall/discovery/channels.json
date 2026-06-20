@@ -1,0 +1,7 @@
+{
+  "_comment": "New Books Network channels = academic FIELDS. Each is a Megaphone RSS feed of author-interview episodes; the book's author/title/(publisher, year) is parsed from the episode title. Add a field by finding its channel's Megaphone feed id. This is the 'discipline / studies / field' axis no catalog API exposes.",
+  "channels": [
+    {"field": "south asian studies", "aliases": ["south asia", "south asian"], "feed": "https://feeds.megaphone.fm/LIT2660294853"},
+    {"field": "all", "aliases": [], "feed": "https://feeds.megaphone.fm/LIT4543917034"}
+  ]
+}

@@ -43,6 +43,11 @@ def model_cache_dir() -> Path:
     return Path(_user_cache_dir(APP_NAME, APP_AUTHOR)) / "models"
 
 
+def download_cache_dir() -> Path:
+    """Where downloaded attachments are cached."""
+    return Path(_user_cache_dir(APP_NAME, APP_AUTHOR)) / "downloads"
+
+
 def config_path() -> Path:
     """Absolute path to config.toml."""
     return user_config_dir() / "config.toml"

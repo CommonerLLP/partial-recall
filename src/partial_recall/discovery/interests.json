@@ -1,0 +1,14 @@
+{
+  "_comment": "Your subject profile — the LCSH-ish terms your work covers. A new LoC release scores by how many of these appear in its subject headings / title / class. Plain string matching, no embeddings. Expand freely.",
+  "interests": [
+    "West Bengal", "Bengal", "Calcutta", "Kolkata",
+    "Mass media", "Digital media", "Journalism", "Media",
+    "Democracy", "Populism", "Political ideology", "Secularism", "Sovereignty",
+    "Caste", "Dalit", "Adivasi", "Untouchab",
+    "Anthropology", "Ethnology",
+    "Agrarian", "Peasant", "Land", "Dispossession",
+    "State", "Nationalism", "Postcolonial", "Decolon",
+    "Hindu", "Muslim", "Communal",
+    "South Asia", "India", "Tamil Nadu", "Pakistan"
+  ]
+}

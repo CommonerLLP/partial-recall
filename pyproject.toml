@@ -38,7 +38,7 @@ dependencies = [
     "rich>=13.7.0",
     "platformdirs>=4.2.0",
     "structlog>=24.1.0",
-    "pypdf>=4.0.0",
+    "pymupdf>=1.24.0",
     # numpy is used by core (embedding/quantize.py packs int8 vectors;
     # search ranks via numpy ops). It's not optional.
     "numpy>=1.26.0",

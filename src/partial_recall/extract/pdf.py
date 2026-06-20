@@ -1,4 +1,4 @@
-"""PDF text extraction via pypdf.
+"""PDF text extraction via PyMuPDF.
 
 v0.0.1 = no OCR. Image-only PDFs yield empty text. Encrypted PDFs raise.
 v0.3.0+ will add OCR (Tesseract / Kraken / Transkribus).
@@ -7,9 +7,7 @@ v0.3.0+ will add OCR (Tesseract / Kraken / Transkribus).
 from __future__ import annotations
 
 from pathlib import Path
-
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError, PdfStreamError
+import fitz
 
 from partial_recall.errors import PartialRecallError
 
@@ -28,42 +26,39 @@ def extract_pdf_text(path: Path) -> str:
 
 
 def extract_pdf_text_by_page(path: Path) -> list[str]:
-    """Return a list of strings, one per page."""
+    """Return a list of strings, one per page, extracted in reading order."""
     if not path.exists():
         raise PdfExtractionError(f"PDF not found: {path}")
+    
     try:
-        reader = PdfReader(str(path))
-    except (PdfReadError, PdfStreamError, OSError) as e:
+        doc = fitz.open(path)
+    except Exception as e:
         raise PdfExtractionError(f"cannot read PDF {path}: {e}") from e
-    if reader.is_encrypted:
+        
+    if doc.is_encrypted:
+        doc.close()
         raise PdfExtractionError(
             f"PDF is encrypted (no decrypt support in v0.0.1): {path}"
         )
-    # pypdf can raise inside reader.pages iteration itself (e.g. "Cannot
-    # find Root object in pdf" for a PDF missing its Catalog). Wrap the
-    # whole iteration so one severely-malformed PDF doesn't kill an
-    # indexing run mid-batch.
+
     pages: list[str] = []
     try:
-        page_iter = iter(reader.pages)
-    except (PdfReadError, PdfStreamError) as e:
-        raise PdfExtractionError(
-            f"cannot enumerate pages of {path}: {e}"
-        ) from e
-    while True:
-        try:
-            page = next(page_iter)
-        except StopIteration:
-            break
-        except (PdfReadError, PdfStreamError):
-            # Cross-ref recovery exhausted; stop reading this PDF, keep
-            # whatever pages we already got.
-            break
-        except Exception:  # noqa: BLE001 — pypdf can throw arbitrary internals
-            break
-        try:
-            text = page.extract_text() or ""
-        except Exception:  # noqa: BLE001 — per-page extraction can also fail
-            text = ""
-        pages.append(text)
+        for page in doc:
+            try:
+                # Use block extraction to preserve column reading order
+                blocks = page.get_text("blocks")
+                # Filter text blocks (block_type == 0)
+                text_blocks = [b for b in blocks if b[6] == 0]
+                
+                # Sort by column (binning x0 to nearest 100 points) then y0
+                text_blocks.sort(key=lambda b: (round(b[0] / 100), b[1]))
+                
+                text = "\n".join(b[4].strip() for b in text_blocks)
+                pages.append(text)
+            except Exception:
+                # Per-page extraction can fail, keep going
+                pages.append("")
+    finally:
+        doc.close()
+
     return pages

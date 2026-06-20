@@ -15,6 +15,7 @@ from partial_recall.config.models import (
     PartialRecallConfig,
     ZoteroConfig,
 )
+from partial_recall.index.pipeline import IndexResult
 
 runner = CliRunner()
 
@@ -54,6 +55,49 @@ def test_status_missing_db_errors_clearly(
     cfg_path = _write_minimal_config(tmp_path, fixtures_dir)
     result = runner.invoke(app, ["status", "--config", str(cfg_path)])
     assert result.exit_code != 0
+
+
+def test_index_accepts_external_dotted_adapter_path(
+    tmp_path: Path,
+    fixtures_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg_path = _write_minimal_config(tmp_path, fixtures_dir)
+    seen: dict[str, str] = {}
+
+    class _Provider:
+        def close(self) -> None:
+            return None
+
+    def _fake_run_indexing(**kwargs):
+        seen["adapter_name"] = kwargs["adapter"].name
+        return IndexResult(
+            run_id=42,
+            item_count=1,
+            chunk_count=1,
+            new_vector_count=1,
+        )
+
+    monkeypatch.setattr("partial_recall.cli.index._build_provider", lambda *a: _Provider())
+    monkeypatch.setattr("partial_recall.cli.index.run_indexing", _fake_run_indexing)
+
+    result = runner.invoke(
+        app,
+        [
+            "index",
+            "--config",
+            str(cfg_path),
+            "--source",
+            "tests.fixture_external_adapter:FixtureExternalAdapter",
+        ],
+    )
+
+    if result.exit_code != 0:
+        print("STDOUT:", result.stdout)
+        print("EXCEPTION:", result.exception)
+    assert result.exit_code == 0
+    assert seen["adapter_name"] == "fixture_external"
+    assert "Indexed" in result.output
 
 
 @pytest.mark.slow
