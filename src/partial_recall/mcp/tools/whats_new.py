@@ -43,6 +43,9 @@ WHATS_NEW_TOOL: Tool = Tool(
                         "description": 'LCSH subject term(s), e.g. ["West Bengal"] or ["Caste"].'},
             "place": {"type": "string", "description": "Geographic subject, e.g. 'West Bengal'."},
             "year": {"type": "string", "description": "Exact publication year, e.g. '2024'."},
+            "since": {"type": "string",
+                      "description": "For a `field` query: only NBN episodes aired on/after "
+                                     "this date (YYYY-MM-DD), e.g. '2026-01-01'."},
         },
         "additionalProperties": False,
     },
@@ -55,12 +58,14 @@ async def handle_whats_new(arguments: dict[str, Any], **_ignored: Any) -> list[T
         return [TextContent(type="text", text=json.dumps(
             {"error": "Give at least one of: field, press, subject, place, year.",
              "hint": 'e.g. {"press":"duke","subject":["Caste"]} or '
-                     '{"subject":["West Bengal"],"year":"2024"} or {"field":"South Asian"}'},
+                     '{"subject":["West Bengal"],"year":"2024"} or '
+                     '{"field":"South Asian Studies","since":"2026-01-01"}'},
             indent=2))]
     try:
         res = find_books(
             field=args.get("field"), press=args.get("press"),
-            subject=args.get("subject"), place=args.get("place"), year=args.get("year"))
+            subject=args.get("subject"), place=args.get("place"),
+            year=args.get("year"), since=args.get("since"))
     except Exception as exc:  # noqa: BLE001 — never crash the MCP loop
         return [TextContent(type="text", text=json.dumps(
             {"error": f"{exc.__class__.__name__}: {exc}",

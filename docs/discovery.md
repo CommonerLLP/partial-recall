@@ -12,6 +12,7 @@ owns its axis:
 
 | You ask by… | Example | Source |
 |---|---|---|
+| **press** (recent titles) | "what's *Princeton* just put out on India?" | **the press's own sitemap** (front-line) |
 | **field / discipline / "studies"** | "what's new in *South Asian Studies*?" | **New Books Network** channels |
 | **press × subject** | "has *Duke* published on *caste*?" | **OpenLibrary** (`publisher` × `subject`) |
 | **topic + place + year (+ forthcoming)** | "new on *West Bengal* in *2024*, incl. CIP" | **Library of Congress** (LCSH/LCC) |
@@ -20,6 +21,25 @@ owns its axis:
 
 ### What each source is good (and not good) at
 
+- **Press sitemaps (the front-line).** A press's own XML sitemap lists every
+  book page; we snapshot it and a **new book-URL = a new book** — so a title
+  surfaces here the moment the press publishes it, *before* any third-party
+  catalogue (LoC, OpenLibrary) gets around to it. (Verified: a 2026 Princeton
+  title was live in the sitemap while absent from both LoC and OpenLibrary.)
+  Per new page we read `og:title` and `og:description` — a plain GET, no
+  headless browser, no third-party reader. First run seeds the baseline; every
+  run after reports only what's new since. Tracked this way:
+  **Princeton, Chicago, Columbia, Cornell, Yale, Harvard, Minnesota, Stanford,
+  Washington, Duke**. Two wrinkles handled: WordPress presses keep books in
+  dedicated `product`/`books` sub-sitemaps (`sub_filter` descends only those);
+  Duke uses flat slugs that mix books with journal issues, so a `book_marker`
+  (`"isbn:"`, present on book pages, absent on journal issues) keeps only books.
+  Presses that expose no usable sitemap (MIT, California, Oxford, Cambridge,
+  Routledge) fall back to LoC + OpenLibrary; each is labelled with the reason in
+  `presses.json`. (Crossref was tested as a by-publisher source and rejected:
+  its publisher filter is ignored and book dates are unreliable. Sites that block
+  a self-identifying crawler User-Agent outright, e.g. cambridge.org, are left on
+  the fallback rather than evaded.)
 - **Library of Congress (SRU + MARC/CIP).** Authoritative; covers *every* press
   including Indian and vernacular houses; carries full **LCSH** subjects, **LCC**
   class, **LCCN**, and a **CIP / forthcoming** flag (books appear before
@@ -37,9 +57,11 @@ owns its axis:
 ## CLI
 
 ```bash
+# A press's newest titles, front-line via its sitemap (seeds on first run,
+# then reports only what's new since the last check)
+python -m partial_recall.discovery.releases --press princeton --subject "India"
 # Library of Congress: topic + place + year, with "since we last checked"
 python -m partial_recall.discovery.releases --subject "West Bengal" --year 2024
-python -m partial_recall.discovery.releases --subject "Caste" --press california
 python -m partial_recall.discovery.releases --list-presses
 ```
 
@@ -51,12 +73,14 @@ The LoC pipe records a per-query snapshot, so a second run reports only what's
 The `whats_new` MCP tool is the router — ask it in natural language from any
 MCP client:
 
+- *"What's Princeton just put out on India?"* → `{ "press": "princeton", "subject": ["India"] }`
 - *"What's new in South Asian Studies?"* → `{ "field": "South Asian Studies" }`
 - *"Has Duke published anything on caste?"* → `{ "press": "duke", "subject": ["Caste"] }`
 - *"New on West Bengal in 2024?"* → `{ "subject": ["West Bengal"], "year": "2024" }`
 
-Each result carries title, authors, publisher, year, and (from LoC) LCSH / LCC /
-LCCN and the CIP flag.
+Each result carries title, authors, publisher, year, and — from LoC — LCSH /
+LCC / LCCN and the CIP flag. Sitemap front-line results carry the title and the
+press's own blurb (`og:description`) as the topic.
 
 ## Registries — expand freely
 

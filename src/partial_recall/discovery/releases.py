@@ -22,11 +22,14 @@ No HTML, no web framework. Returns structured records; the CLI prints text.
 from __future__ import annotations
 
 import argparse
+import gzip
+import html as _html
 import json
 import re
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -34,7 +37,13 @@ from partial_recall.paths import user_data_dir
 
 PRESSES_PATH = Path(__file__).with_name("presses.json")
 STATE_PATH = user_data_dir() / "discovery_state.json"
-UA = {"User-Agent": "partial-recall (+https://github.com/CommonerLLP/partial-recall)"}
+SITEMAP_DIR = user_data_dir()   # per-press URL snapshots: sitemap_<short>.json
+# Conventional self-identifying crawler UA (the "Mozilla/5.0 (compatible; …)"
+# form used by Googlebot/bingbot): honestly names the tool and links the repo,
+# while carrying the browser token that naive WAFs require. Not spoofing — sites
+# that block this (e.g. cambridge.org) are left on the LoC fallback, not evaded.
+UA = {"User-Agent": "Mozilla/5.0 (compatible; partial-recall/0.3; "
+                    "+https://github.com/CommonerLLP/partial-recall)"}
 SRU = "http://lx2.loc.gov:210/lcdb"
 MARC = "{http://www.loc.gov/MARC21/slim}"
 
@@ -44,11 +53,12 @@ class Release:
     title: str
     authors: str
     publisher: str
-    year: str
+    year: str             # the book's publication year
     lccn: str
     subjects: str = ""    # LCSH headings, " | "-joined
     lcc: str = ""         # LC classification (e.g. P95.82.I4)
     cip: bool = False     # prepublication CIP record (encoding level 8)
+    date: str = ""        # ISO source date — for NBN, the episode air date (YYYY-MM-DD)
 
 
 # ---------------------------------------------------------------- registry
@@ -195,6 +205,110 @@ def _ol_parse(docs: list[dict]) -> list[Release]:
     return out
 
 
+# ---------------------------------------------- press sitemap (front-line; no third party)
+_LOC_RE = re.compile(r"<loc>([^<]+)</loc>")
+_OG_TITLE = re.compile(r'<meta (?:property|name)="og:title" content="([^"]*)"')
+_OG_DESC = re.compile(r'<meta (?:property|name)="og:description" content="([^"]*)"')
+
+
+def _http(url: str) -> str:
+    """Plain GET (gzip-aware). No headless browser, no third-party reader."""
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=45) as r:
+            raw = r.read()
+            if raw[:2] == b"\x1f\x8b":
+                raw = gzip.decompress(raw)
+            return raw.decode("utf-8", "ignore")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! fetch failed {url[:60]}: {exc}")
+        return ""
+
+
+def _parse_sitemap(xml: str) -> list[str]:
+    """All <loc> URLs from a sitemap or sitemap-index (pure, unit-testable)."""
+    return _LOC_RE.findall(xml)
+
+
+def _clean_title(t: str) -> str:
+    """Strip press-page title cruft: ' | Stanford University Press', 'X by Y - Paper',
+    'Title — Harvard University Press' (em/en-dash + press name)."""
+    t = re.sub(r"\s*\|\s*[^|]+$", "", t).strip()      # ' | <Press>'
+    t = re.sub(r"\s+by\s+.+?\s+-\s+\w+$", "", t).strip()  # 'Title by Author - Paper'
+    t = re.sub(r"\s*[—–]\s*[^—–]*\bPress\s*$", "", t).strip()  # ' — <X> Press'
+    return t
+
+
+def _book_meta_from_html(html: str, publisher: str) -> Release:
+    """Title + og:description from a server-rendered book page (pure)."""
+    t = _OG_TITLE.search(html)
+    d = _OG_DESC.search(html)
+    return Release(
+        title=_clean_title(_html.unescape(t.group(1))) if t else "",
+        authors="—", publisher=publisher, year="", lccn="",
+        subjects=_html.unescape(d.group(1)).strip()[:240] if d else "", lcc="", cip=False)
+
+
+def _sitemap_book_urls(cfg: dict) -> list[str]:
+    """All book-page URLs for a press. cfg gives either an `index` (a sitemap
+    index to descend) or a list of `sitemaps` (urlsets); `book_substr` filters
+    book pages from other URLs (empty string = keep all, for sub-sitemaps that
+    already contain only books); `sub_filter`, when set, descends only the
+    index sub-sitemaps whose URL contains it (e.g. "product" for the WordPress
+    presses whose books live in dedicated product sub-sitemaps)."""
+    substr = cfg.get("book_substr", "/books/")
+    sub_filter = cfg.get("sub_filter")
+    roots = cfg.get("sitemaps") or [cfg["index"]]
+    urls: list[str] = []
+    for root in roots:
+        body = _http(root)
+        locs = _parse_sitemap(body)
+        if "<sitemapindex" in body:                 # index → descend
+            for sub in locs:
+                if sub == root or (sub_filter and sub_filter not in sub):
+                    continue
+                urls += [u for u in _parse_sitemap(_http(sub)) if substr in u]
+        else:                                        # urlset → these are pages
+            urls += [u for u in locs if substr in u]
+    return urls
+
+
+def press_new_from_sitemap(press: dict, subject: list[str] | None = None,
+                           limit: int = 40, mark: bool = True) -> dict:
+    """New books from a press = book URLs that appeared in its sitemap since the
+    last snapshot (the precise 'new' signal). First run seeds the baseline and
+    returns nothing-new; each run after fetches the new pages (og:title + desc),
+    filters by subject, and returns them. No third party — plain GET + diff."""
+    cur = set(_sitemap_book_urls(press["source"]))
+    snap = SITEMAP_DIR / f"sitemap_{press['short']}.json"
+    seeded = snap.exists()
+    prev = set(json.loads(snap.read_text())) if seeded else set()
+    new = sorted(cur - prev)
+    if mark:
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        snap.write_text(json.dumps(sorted(cur)))
+    if not seeded:
+        return {"seeded": len(cur), "new_total": 0, "results": []}
+    terms = [t.lower() for t in (subject or [])]
+    # For presses whose sitemap mixes books with non-books (Duke: flat slugs cover
+    # books AND journal issues), `book_marker` keeps only pages whose HTML carries
+    # it — e.g. "isbn:" (present on Duke book pages, absent on journal issues).
+    marker = (press["source"].get("book_marker") or "").lower()
+    out: list[Release] = []
+    for u in new:
+        html = _http(u)
+        if marker and marker not in html.lower():
+            continue
+        r = _book_meta_from_html(html, press["name"])
+        if not r.title:
+            continue
+        if terms and not any(t in (r.title + " " + r.subjects).lower() for t in terms):
+            continue
+        out.append(r)
+        if len(out) >= limit:
+            break
+    return {"seeded": 0, "new_total": len(new), "results": out}
+
+
 # ---------------------------------------------- New Books Network (field channels)
 CHANNELS_PATH = Path(__file__).with_name("channels.json")
 _NBN_TITLE = re.compile(r'^\s*(.+?),\s*[“"\'](.+?)[”"\']\s*\(([^()]+?),?\s*(\d{4})\)')
@@ -212,9 +326,18 @@ def find_channel(field: str) -> dict | None:
     return None
 
 
+def _episode_date(pubdate: str) -> str:
+    """RFC-822 pubDate -> 'YYYY-MM-DD' (the episode air date), or '' if unparseable."""
+    try:
+        return parsedate_to_datetime(pubdate).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
 def _nbn_parse(xml: str) -> list[Release]:
     """Parse an NBN Megaphone feed: book is encoded in the episode title as
-    'Author, "Title" (Publisher, Year)'. Non-book episodes (no match) skipped."""
+    'Author, "Title" (Publisher, Year)'; the episode air date is the item pubDate.
+    Non-book episodes (no title match) are skipped."""
     out: list[Release] = []
     try:
         root = ET.fromstring(xml)
@@ -227,11 +350,13 @@ def _nbn_parse(xml: str) -> list[Release]:
         author, title, pub, year = (x.strip() for x in m.groups())
         blurb = re.sub(r"<[^>]+>", "", (it.findtext("description") or "")).strip()
         out.append(Release(title=title, authors=author, publisher=pub, year=year,
-                           lccn="", subjects=blurb[:160], lcc="", cip=False))
+                           lccn="", subjects=blurb[:160], lcc="", cip=False,
+                           date=_episode_date(it.findtext("pubDate") or "")))
     return out
 
 
-def _nbn(field: str, limit: int = 25) -> list[Release]:
+def _nbn(field: str, limit: int = 25, since: str | None = None) -> list[Release]:
+    """NBN channel for a field. `since` (YYYY-MM-DD) filters by episode air date."""
     ch = find_channel(field)
     if not ch:
         return []
@@ -242,7 +367,10 @@ def _nbn(field: str, limit: int = 25) -> list[Release]:
     except Exception as exc:  # noqa: BLE001
         print(f"  ! NBN fetch failed: {exc}")
         return []
-    return _nbn_parse(xml)[:limit]
+    recs = _nbn_parse(xml)
+    if since:
+        recs = [r for r in recs if r.date and r.date >= since]
+    return recs[:limit]
 
 
 # ---------------------------------------------------------------- router
@@ -255,7 +383,7 @@ def _press_match(r: Release, press: str) -> bool:
 def find_books(
     *, field: str | None = None, press: str | None = None,
     subject: list[str] | None = None, place: str | None = None,
-    year: str | None = None, limit: int = 40,
+    year: str | None = None, since: str | None = None, limit: int = 60,
 ) -> dict:
     """Route a release query to the source that owns its axes, then merge.
 
@@ -263,15 +391,25 @@ def find_books(
       press x subject (no place/year)    -> OpenLibrary (publisher x subject)
       topic + place + year (+ CIP)       -> Library of Congress (LCSH/LCC)
 
-    `press` is applied as a publisher filter across whatever sources ran.
-    Results deduped by title. Returns {"sources": [...], "results": [Release]}."""
+    `since` (YYYY-MM-DD) filters NBN by episode air date. `press` is applied as a
+    publisher filter across whatever sources ran. Results deduped by title.
+    Returns {"sources": [...], "results": [Release]}."""
     results: list[Release] = []
     sources: list[str] = []
+    p = find_press(press) if press else None
 
     if field:
-        results += _nbn(field, limit)
+        results += _nbn(field, limit, since=since)
         sources.append(f"NBN:{field}")
-    if press and subject and not (place or year):
+    if p and p.get("source", {}).get("type") == "sitemap":
+        # FRONT-LINE for this press: its own sitemap (catches the newest books
+        # before LoC/OpenLibrary catalogue them). No third party.
+        sm = press_new_from_sitemap(p, subject, limit=limit)
+        results += sm["results"]
+        sources.append(f"sitemap:{p['short']}" +
+                       (f"(baseline seeded: {sm['seeded']} urls)" if sm["seeded"]
+                        else f"({sm['new_total']} new)"))
+    elif press and subject and not (place or year):
         results += _openlibrary(subject, press, year, rows=limit)
         sources.append("openlibrary")
     if place or year or (subject and not field and not (press and not (place or year))):
