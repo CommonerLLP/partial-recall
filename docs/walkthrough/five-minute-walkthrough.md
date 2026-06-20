@@ -127,6 +127,16 @@ walkthrough).
 # use the MCP server for it. See the next step.
 ```
 
+## 6. Fetching and Placing Items (≈ 5s)
+
+```zsh
+# Once you find an item via search, you can fetch its raw text (e.g., from Zotero PDF)
+partial-recall fetch <item_key>
+
+# Or place a candidate title against the existing corpus to see if you already have it
+partial-recall place "The Annihilation of Caste"
+```
+
 ## 7. MCP server smoke (≈ 5s)
 
 ```zsh
@@ -138,14 +148,17 @@ partial-recall serve
 claude mcp add partial-recall ~/.local/bin/partial-recall -- serve
 ```
 
-Then any MCP client (Claude Code, Continue, etc.) sees five tools:
+Then any MCP client (Claude Code, Continue, etc.) sees nine tools:
 
 - `semantic_search` — vector search
 - `search_fulltext` — FTS5 keyword/phrase search
 - `semantic_status` — index totals + active embedding-run metadata
-- `get_item_details` — full item metadata + library-location +
-  collections for one item
+- `get_item_details` — full item metadata + library-location + collections
 - `list_collections` — Zotero collections with item-count per
+- `library_search` — structured metadata search (author, tag, year)
+- `fetch_item` — retrieves clean reading-order text for an item
+- `place_item` — semantic duplicate check against your corpus
+- `whats_new` — chronological discovery of newly released works
 
 ## 8. Keyring (optional; only if you'll use Gemini later)
 
