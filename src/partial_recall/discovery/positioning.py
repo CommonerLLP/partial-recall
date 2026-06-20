@@ -25,6 +25,7 @@ slice.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.search.orchestrator import search
@@ -144,3 +145,54 @@ def position(
         likely_owned=likely_owned,
         owned_match=owned_match,
     )
+
+
+def _serialise_neighbour(n: Neighbour) -> dict[str, Any]:
+    return {
+        "score": round(n.score, 4),
+        "item_key": n.item_key,
+        "corpus": n.corpus,
+        "title": n.title,
+        "creators": n.creators,
+        "date": n.date,
+        "source_type": n.source_type,
+        "preview": n.preview,
+    }
+
+
+def build_place_payload(placement: Positioning, active: Any) -> dict[str, Any]:
+    return {
+        "query_text": placement.query_text,
+        "placement": {
+            "density": placement.density,
+            "top_score": (
+                round(placement.top_score, 4)
+                if placement.top_score is not None else None
+            ),
+            "mean_score": (
+                round(placement.mean_score, 4)
+                if placement.mean_score is not None else None
+            ),
+            "related_count": placement.related_count,
+            "likely_owned": placement.likely_owned,
+            "owned_match": (
+                _serialise_neighbour(placement.owned_match)
+                if placement.owned_match else None
+            ),
+        },
+        "neighbours": [_serialise_neighbour(n) for n in placement.neighbours],
+        "interpretation": {
+            "note": (
+                "Density and likely_owned are heuristic and relative to the "
+                "active embedding model. Trust the raw scores over the labels."
+            ),
+            "thresholds": {
+                "likely_owned": LIKELY_OWNED_THRESHOLD,
+                "dense_top": DENSE_TOP,
+                "moderate_top": MODERATE_TOP,
+            },
+            "embedding_model": active.model_name if active else None,
+            "embedding_provider": active.provider if active else None,
+            "active_run_id": active.run_id if active else None,
+        },
+    }

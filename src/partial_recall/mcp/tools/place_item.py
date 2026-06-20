@@ -18,10 +18,7 @@ from typing import Any
 from mcp.types import TextContent, Tool
 
 from partial_recall.discovery.positioning import (
-    DENSE_TOP,
-    LIKELY_OWNED_THRESHOLD,
-    MODERATE_TOP,
-    Neighbour,
+    build_place_payload,
     position,
 )
 from partial_recall.embedding.protocol import EmbeddingProvider
@@ -83,17 +80,7 @@ def _error(message: str, hint: str) -> TextContent:
     )
 
 
-def _serialise_neighbour(n: Neighbour) -> dict[str, Any]:
-    return {
-        "score": round(n.score, 4),
-        "item_key": n.item_key,
-        "corpus": n.corpus,
-        "title": n.title,
-        "creators": n.creators,
-        "date": n.date,
-        "source_type": n.source_type,
-        "preview": n.preview,
-    }
+
 
 
 async def handle_place_item(
@@ -140,41 +127,7 @@ async def handle_place_item(
         )]
 
     active = store.get_active_run()
-    payload = {
-        "query_text": placement.query_text,
-        "placement": {
-            "density": placement.density,
-            "top_score": (
-                round(placement.top_score, 4)
-                if placement.top_score is not None else None
-            ),
-            "mean_score": (
-                round(placement.mean_score, 4)
-                if placement.mean_score is not None else None
-            ),
-            "related_count": placement.related_count,
-            "likely_owned": placement.likely_owned,
-            "owned_match": (
-                _serialise_neighbour(placement.owned_match)
-                if placement.owned_match else None
-            ),
-        },
-        "neighbours": [_serialise_neighbour(n) for n in placement.neighbours],
-        "interpretation": {
-            "note": (
-                "Density and likely_owned are heuristic and relative to the "
-                "active embedding model. Trust the raw scores over the labels."
-            ),
-            "thresholds": {
-                "likely_owned": LIKELY_OWNED_THRESHOLD,
-                "dense_top": DENSE_TOP,
-                "moderate_top": MODERATE_TOP,
-            },
-            "embedding_model": active.model_name if active else None,
-            "embedding_provider": active.provider if active else None,
-            "active_run_id": active.run_id if active else None,
-        },
-    }
+    payload = build_place_payload(placement, active)
     return [TextContent(
         type="text",
         text=json.dumps(payload, indent=2, ensure_ascii=False),
