@@ -33,6 +33,10 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from partial_recall.discovery.politics import (
+    apply_marginalized_first_positioning,
+    is_marginalized_focus,
+)
 from partial_recall.paths import user_data_dir
 
 PRESSES_PATH = Path(__file__).with_name("presses.json")
@@ -431,6 +435,8 @@ def find_books(
             continue
         seen.add(k)
         uniq.append(r)
+        
+    uniq = apply_marginalized_first_positioning(uniq)
     return {"sources": sources, "results": uniq[:limit]}
 
 
@@ -479,9 +485,30 @@ def whats_new(
     if mark_checked:
         state[snap_key] = [_idkey(r) for r in uniq]
         _save_state(state)
+        
+    final_results = uniq if first_check else new
+    final_results = apply_marginalized_first_positioning(final_results)
+    
     return {"press": (p["name"] if p else "all presses"), "subject": subj_label,
             "first_check": first_check, "total_in_catalogue": len(uniq),
-            "results": (uniq if first_check else new)[:limit]}
+            "results": final_results[:limit]}
+
+
+# ---------------------------------------------------------------- sweep
+def sweep_presses(mark_checked: bool = True) -> dict:
+    """Sweep all configured front-line press sitemaps for new titles.
+    
+    Returns a dict mapping press name to its sitemap results (seeded count, 
+    new_total, and parsed Release objects)."""
+    out = {}
+    for p in load_presses():
+        if p.get("source", {}).get("type") == "sitemap":
+            print(f"Sweeping {p['name']}...")
+            res = press_new_from_sitemap(p, mark=mark_checked)
+            if res["results"]:
+                res["results"] = apply_marginalized_first_positioning(res["results"])
+            out[p["name"]] = res
+    return out
 
 
 # ---------------------------------------------------------------- CLI
@@ -493,6 +520,8 @@ def _print(res: dict) -> None:
         print("  (nothing new since last check)")
     for r in res["results"]:
         tag = " [CIP/forthcoming]" if r.cip else ""
+        if is_marginalized_focus(r):
+            tag += " [★ BAHUJAN/MARGINALIZED FOCUS]"
         print(f"  • {r.title}{tag}")
         print(f"      {r.authors}  ·  {r.publisher}  ·  {r.year}  ·  {r.lccn}")
         if r.subjects:
@@ -509,6 +538,9 @@ def main() -> None:
     ap.add_argument("--subject", nargs="+", help='LCSH subject term(s), e.g. "West Bengal"')
     ap.add_argument("--year", help="exact publication year, e.g. 2024")
     ap.add_argument("--no-mark", action="store_true", help="do not update the snapshot")
+    ap.add_argument(
+        "--sweep", action="store_true", help="sweep all front-line press sitemaps for new titles"
+    )
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--list-presses", action="store_true")
     a = ap.parse_args()
@@ -516,6 +548,42 @@ def main() -> None:
         for p in load_presses():
             print(f"  {p['short']:12} {p['name']} ({p['country']})")
         return
+    
+    if a.sweep:
+        res = sweep_presses(mark_checked=not a.no_mark)
+        if a.json:
+            # Need to format results for JSON
+            payload = {}
+            for press_name, pres in res.items():
+                payload[press_name] = {
+                    "seeded": pres["seeded"],
+                    "new_total": pres["new_total"],
+                    "results": [asdict(r) for r in pres["results"]]
+                }
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            total_new = 0
+            for press_name, pres in res.items():
+                head = f'New from {press_name}'
+                if pres["seeded"]:
+                    print(f"\n{head}\n{'=' * min(len(head), 90)}")
+                    print(
+                        f"  (Baseline seeded: {pres['seeded']} URLs tracked. "
+                        "Future sweeps will show new books.)"
+                    )
+                else:
+                    if pres["results"]:
+                        print(f"\n{head}\n{'=' * min(len(head), 90)}")
+                        for r in pres["results"]:
+                            tag = ""
+                            if is_marginalized_focus(r):
+                                tag = " [★ BAHUJAN/MARGINALIZED FOCUS]"
+                            print(f"  • {r.title}{tag}")
+                            print(f"      {r.publisher}  ·  {r.subjects}")
+                    total_new += len(pres["results"])
+            print(f"\nSweep complete. {total_new} new front-line books found.")
+        return
+
     res = whats_new(press=a.press, subject=a.subject, year=a.year, mark_checked=not a.no_mark)
     if a.json:
         payload = {**res, "results": [asdict(r) for r in res["results"]]}

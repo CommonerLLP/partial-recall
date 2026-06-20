@@ -26,6 +26,8 @@ from pathlib import Path
 
 from partial_recall.corpus.types import Item, ItemKind, Source
 from partial_recall.errors import CorpusUnavailableError
+from partial_recall.extract.docx import extract_docx_text
+from partial_recall.extract.epub import extract_epub_text
 from partial_recall.extract.pdf import PdfExtractionError, extract_pdf_text
 
 # Zotero annotation types we treat as text. See module docstring.
@@ -231,27 +233,45 @@ class ZoteroAdapter:
             FROM itemAttachments a
             JOIN items child ON child.itemID = a.itemID
             WHERE a.parentItemID = ?
-              AND a.contentType = 'application/pdf'
+              AND a.contentType IN (
+                  'application/pdf',
+                  'application/epub+zip',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              )
               AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
             """,
             (item_id,),
         ).fetchall()
         for att in att_rows:
+            # Determine source_type from content type or path
+            # But we don't have contentType in the SELECT output.
+            # Let's infer from extension or att_key
+            source_type = "pdf"
+            if att["path"]:
+                if att["path"].lower().endswith(".epub"):
+                    source_type = "epub"
+                elif att["path"].lower().endswith(".docx"):
+                    source_type = "docx"
+
             yield Source(
-                source_type="pdf",
-                source_ref=f"pdf:{att['att_key']}",
+                source_type=source_type,
+                source_ref=f"{source_type}:{att['att_key']}",
                 kind=ItemKind.TEXT,
             )
-        note_rows = self._conn.execute(
-            """
+        note_rows = (
+            self._conn.execute(
+                """
             SELECT child.key AS note_key
             FROM itemNotes n
             JOIN items child ON child.itemID = n.itemID
             WHERE n.parentItemID = ?
               AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
             """,
-            (item_id,),
-        ).fetchall() if self._has_notes else []
+                (item_id,),
+            ).fetchall()
+            if self._has_notes
+            else []
+        )
         for nr in note_rows:
             yield Source(
                 source_type="note",
@@ -263,8 +283,9 @@ class ZoteroAdapter:
         # Use a placeholder-list for the type filter so the IN-clause stays
         # parameterised.
         type_placeholders = ",".join("?" * len(_TEXTUAL_ANNOTATION_TYPES))
-        ann_rows = self._conn.execute(
-            f"""
+        ann_rows = (
+            self._conn.execute(
+                f"""
             SELECT child.key AS ann_key
             FROM itemAnnotations ann
             JOIN itemAttachments att ON att.itemID = ann.parentItemID
@@ -276,8 +297,11 @@ class ZoteroAdapter:
               AND ann.type IN ({type_placeholders})
             ORDER BY ann.sortIndex
             """,
-            (item_id, *_TEXTUAL_ANNOTATION_TYPES),
-        ).fetchall() if self._has_annotations else []
+                (item_id, *_TEXTUAL_ANNOTATION_TYPES),
+            ).fetchall()
+            if self._has_annotations
+            else []
+        )
         for ar in ann_rows:
             yield Source(
                 source_type="annotation",
@@ -296,6 +320,16 @@ class ZoteroAdapter:
                 return extract_pdf_text(pdf_path)
             except PdfExtractionError:
                 return None
+        if source.source_type == "epub":
+            epub_path = self._resolve_pdf_path(source) # _resolve_pdf_path works for any attachment key
+            if epub_path is None or not epub_path.exists():
+                return None
+            return extract_epub_text(epub_path)
+        if source.source_type == "docx":
+            docx_path = self._resolve_pdf_path(source)
+            if docx_path is None or not docx_path.exists():
+                return None
+            return extract_docx_text(docx_path)
         if source.source_type == "note":
             return self._get_note_text(source)
         if source.source_type == "annotation":
@@ -359,7 +393,7 @@ class ZoteroAdapter:
             return None
         if not source.source_ref or not source.source_ref.startswith("note:"):
             return None
-        key = source.source_ref[len("note:"):]
+        key = source.source_ref[len("note:") :]
         row = self._conn.execute(
             """
             SELECT n.note, n.title
@@ -382,7 +416,7 @@ class ZoteroAdapter:
             return None
         if not source.source_ref or not source.source_ref.startswith("annotation:"):
             return None
-        key = source.source_ref[len("annotation:"):]
+        key = source.source_ref[len("annotation:") :]
         row = self._conn.execute(
             """
             SELECT ann.text, ann.comment, ann.pageLabel
@@ -415,7 +449,7 @@ class ZoteroAdapter:
         """
         if not source.source_ref or not source.source_ref.startswith("pdf:"):
             return None
-        key = source.source_ref[len("pdf:"):]
+        key = source.source_ref[len("pdf:") :]
         att_dir = self.storage_path / key
         if not att_dir.exists():
             return None
