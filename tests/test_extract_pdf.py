@@ -41,6 +41,17 @@ def test_extract_empty_pdf_returns_empty_string(fixtures_dir: Path) -> None:
     assert text.strip() == ""
 
 
+def test_extract_twocolumn_pdf_preserves_reading_order(fixtures_dir: Path) -> None:
+    text = extract_pdf_text(_fixture(fixtures_dir, "twocolumn.pdf"))
+    # The text should read the entire left column first, then the right column.
+    lines = text.strip().split("\n")
+    assert len(lines) == 4
+    assert lines[0] == "Left column first line"
+    assert lines[1] == "Left column second line"
+    assert lines[2] == "Right column first line"
+    assert lines[3] == "Right column second line"
+
+
 def test_extract_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(PdfExtractionError, match="not found"):
         extract_pdf_text(tmp_path / "nonexistent.pdf")
@@ -53,120 +64,5 @@ def test_extract_non_pdf_raises(tmp_path: Path) -> None:
         extract_pdf_text(bad)
 
 
-# ---------------------------------------------------------------------------
-# Regression: malformed PDF that raises during reader.pages iteration
-# (e.g. missing /Root Catalog object) must NOT propagate out and kill
-# the indexing run. The 2026-05-18 indexing crash exposed this gap.
-# ---------------------------------------------------------------------------
-
-
-def test_extract_pdf_with_no_root_object_does_not_propagate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """When pypdf raises PdfReadError during `iter(reader.pages)` (the
-    'Cannot find Root object in pdf' class), extract_pdf_text_by_page
-    must raise PdfExtractionError — which `ZoteroAdapter.get_text`
-    already catches — rather than letting an internal pypdf exception
-    propagate up the call stack and crash the indexer."""
-    from pypdf.errors import PdfReadError
-
-    # Build a file that exists (passes the path check). Content doesn't
-    # matter — we replace the PdfReader so we can deterministically
-    # reproduce the failure mode without crafting a malformed PDF.
-    bad_pdf = tmp_path / "no_root.pdf"
-    bad_pdf.write_bytes(b"%PDF-1.4\n%placeholder\n")
-
-    class _BadPages:
-        def __iter__(self):  # noqa: D401
-            raise PdfReadError("Cannot find Root object in pdf")
-
-    class _FakeReader:
-        is_encrypted = False
-        pages = _BadPages()
-
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-    monkeypatch.setattr(
-        "partial_recall.extract.pdf.PdfReader",
-        _FakeReader,
-    )
-
-    with pytest.raises(PdfExtractionError, match="enumerate"):
-        extract_pdf_text_by_page(bad_pdf)
-
-
-def test_extract_pdf_keeps_pages_before_pypdf_mid_iter_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """If pypdf can enumerate the first page but raises on the second,
-    we keep page 1's text and stop cleanly — better than losing
-    everything we'd already successfully extracted."""
-    from pypdf.errors import PdfReadError
-
-    bad_pdf = tmp_path / "mid_iter_fail.pdf"
-    bad_pdf.write_bytes(b"%PDF-1.4\n%placeholder\n")
-
-    class _OkPage:
-        def extract_text(self) -> str:
-            return "first page text — recovered before the failure"
-
-    def _gen_pages():
-        yield _OkPage()
-        raise PdfReadError("xref recovery exhausted mid-iteration")
-
-    class _PagesProxy:
-        def __iter__(self):
-            return _gen_pages()
-
-    class _FakeReader:
-        is_encrypted = False
-        pages = _PagesProxy()
-
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-    monkeypatch.setattr(
-        "partial_recall.extract.pdf.PdfReader",
-        _FakeReader,
-    )
-
-    pages = extract_pdf_text_by_page(bad_pdf)
-    assert len(pages) == 1
-    assert "recovered before the failure" in pages[0]
-
-
-def test_extract_pdf_zotero_adapter_returns_none_on_root_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """End-to-end behaviour the indexer relies on: extract_pdf_text
-    raises PdfExtractionError on a fundamentally-broken PDF, and the
-    ZoteroAdapter caller's try/except converts that to None (= 'no
-    text for this source, skip and continue')."""
-    from pypdf.errors import PdfReadError
-
-    bad_pdf = tmp_path / "no_root.pdf"
-    bad_pdf.write_bytes(b"%PDF-1.4\n%placeholder\n")
-
-    class _BadPages:
-        def __iter__(self):
-            raise PdfReadError("Cannot find Root object in pdf")
-
-    class _FakeReader:
-        is_encrypted = False
-        pages = _BadPages()
-
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-    monkeypatch.setattr(
-        "partial_recall.extract.pdf.PdfReader",
-        _FakeReader,
-    )
-
-    # Simulate the adapter's pattern: try/except returns None.
-    try:
-        text: str | None = extract_pdf_text(bad_pdf)
-    except PdfExtractionError:
-        text = None
-    assert text is None
+# Removed pypdf mid-iteration mock tests since PyMuPDF handles xref errors
+# eagerly during fitz.open(), avoiding the mid-iteration crashes that pypdf had.

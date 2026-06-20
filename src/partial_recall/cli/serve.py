@@ -82,11 +82,6 @@ def serve_command(
         cfg.embedding.provider, cfg.embedding.model, cfg.embedding.device
     )
     store = VectorStore(cfg.index.vector_db_path)
-    zotero_sqlite = (
-        cfg.zotero.sqlite_path
-        if getattr(cfg, "zotero", None) and cfg.zotero.enabled
-        else None
-    )
     active = store.get_active_run()
     if active is None:
         store.close()
@@ -103,7 +98,7 @@ def serve_command(
 
     try:
         asyncio.run(_serve_with_signals(
-            store=store, provider=provider, zotero_sqlite_path=zotero_sqlite,
+            store=store, provider=provider, config=cfg,
         ))
     finally:
         store.close()
@@ -115,7 +110,7 @@ async def _serve_with_signals(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
-    zotero_sqlite_path: Path | None = None,
+    config: Any,
 ) -> None:
     """Run the MCP stdio loop; install SIGINT/SIGTERM handlers that signal
     the loop to drain and exit."""
@@ -137,7 +132,7 @@ async def _serve_with_signals(
 
     # Race the MCP loop against the stop event.
     serve_task = asyncio.create_task(
-        run_stdio(store=store, provider=provider, zotero_sqlite_path=zotero_sqlite_path)
+        run_stdio(store=store, provider=provider, config=config)
     )
     stop_task = asyncio.create_task(stop_event.wait())
     _, pending = await asyncio.wait(

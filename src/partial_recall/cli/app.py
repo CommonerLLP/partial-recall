@@ -13,6 +13,7 @@ import typer
 
 from partial_recall import __version__
 from partial_recall.cli.doctor import doctor_command
+from partial_recall.cli.fetch import fetch_command
 from partial_recall.cli.import_cookjohn import import_app
 from partial_recall.cli.index import index_command
 from partial_recall.cli.init import init_command
@@ -39,6 +40,7 @@ app.command(name="index", help="Build / update the vector index.")(index_command
 app.command(name="status", help="Show index status.")(status_command)
 app.command(name="place", help="Position a candidate work against the corpus.")(place_command)
 app.command(name="search", help="Run a semantic search.")(search_command)
+app.command(name="fetch", help="Fetch a remote resource.")(fetch_command)
 app.command(name="serve", help="Start the MCP server over stdio.")(serve_command)
 app.command(
     name="doctor",

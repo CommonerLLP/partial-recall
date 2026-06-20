@@ -43,6 +43,9 @@ class ZoteroConfig(BaseModel):
     enabled: bool = True
     sqlite_path: Path
     storage_path: Path
+    api_key: str | None = None
+    user_id: str | None = None
+    group_id: str | None = None
 
 
 class FolderConfig(BaseModel):
