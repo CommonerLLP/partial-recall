@@ -33,6 +33,10 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from partial_recall.discovery.politics import (
+    apply_marginalized_first_positioning,
+    is_marginalized_focus,
+)
 from partial_recall.paths import user_data_dir
 
 PRESSES_PATH = Path(__file__).with_name("presses.json")
@@ -431,6 +435,8 @@ def find_books(
             continue
         seen.add(k)
         uniq.append(r)
+        
+    uniq = apply_marginalized_first_positioning(uniq)
     return {"sources": sources, "results": uniq[:limit]}
 
 
@@ -479,9 +485,13 @@ def whats_new(
     if mark_checked:
         state[snap_key] = [_idkey(r) for r in uniq]
         _save_state(state)
+        
+    final_results = uniq if first_check else new
+    final_results = apply_marginalized_first_positioning(final_results)
+    
     return {"press": (p["name"] if p else "all presses"), "subject": subj_label,
             "first_check": first_check, "total_in_catalogue": len(uniq),
-            "results": (uniq if first_check else new)[:limit]}
+            "results": final_results[:limit]}
 
 
 # ---------------------------------------------------------------- sweep
@@ -495,6 +505,8 @@ def sweep_presses(mark_checked: bool = True) -> dict:
         if p.get("source", {}).get("type") == "sitemap":
             print(f"Sweeping {p['name']}...")
             res = press_new_from_sitemap(p, mark=mark_checked)
+            if res["results"]:
+                res["results"] = apply_marginalized_first_positioning(res["results"])
             out[p["name"]] = res
     return out
 
@@ -508,6 +520,8 @@ def _print(res: dict) -> None:
         print("  (nothing new since last check)")
     for r in res["results"]:
         tag = " [CIP/forthcoming]" if r.cip else ""
+        if is_marginalized_focus(r):
+            tag += " [★ BAHUJAN/MARGINALIZED FOCUS]"
         print(f"  • {r.title}{tag}")
         print(f"      {r.authors}  ·  {r.publisher}  ·  {r.year}  ·  {r.lccn}")
         if r.subjects:
@@ -561,7 +575,10 @@ def main() -> None:
                     if pres["results"]:
                         print(f"\n{head}\n{'=' * min(len(head), 90)}")
                         for r in pres["results"]:
-                            print(f"  • {r.title}")
+                            tag = ""
+                            if is_marginalized_focus(r):
+                                tag = " [★ BAHUJAN/MARGINALIZED FOCUS]"
+                            print(f"  • {r.title}{tag}")
                             print(f"      {r.publisher}  ·  {r.subjects}")
                     total_new += len(pres["results"])
             print(f"\nSweep complete. {total_new} new front-line books found.")
