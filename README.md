@@ -45,6 +45,7 @@ partial-recall place "title"     # place a candidate work against the existing c
 For a step-by-step walkthrough see [docs/walkthrough/five-minute-walkthrough.md](./docs/walkthrough/five-minute-walkthrough.md).
 For known failure modes see [docs/troubleshooting.md](./docs/troubleshooting.md).
 For every config option see [docs/config/reference.md](./docs/config/reference.md).
+For the current project boundary see [SCOPE.md](./SCOPE.md).
 
 Tab-completion:
 
@@ -213,6 +214,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 **Current release: v0.3.1.**
 
+See [SCOPE.md](./SCOPE.md) for the current project boundary.
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
 
 **What's next:**
