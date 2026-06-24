@@ -211,7 +211,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Roadmap and status
 
-**Current release: v0.3.0.**
+**Current release: v0.3.1.**
 
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
 

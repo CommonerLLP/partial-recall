@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+if [ -x ".venv/bin/ruff" ]; then
+    RUFF=".venv/bin/ruff"
+else
+    RUFF="ruff"
+fi
+
+if [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+else
+    PYTHON="python"
+fi
+
+"$RUFF" check .
+"$PYTHON" -m pytest -q -m "not live and not slow"

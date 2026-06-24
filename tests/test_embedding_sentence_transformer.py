@@ -1,30 +1,74 @@
 """Tests for SentenceTransformerProvider.
 
-sentence-transformers is an optional dependency — all tests that need it
-are skipped if it is not installed.
+These are unit tests: they inject a tiny fake sentence-transformers module so
+normal non-live test runs never fetch Hugging Face model metadata.
 """
 
 from __future__ import annotations
 
+import sys
+import types
+
 import numpy as np
 import pytest
 
-sentence_transformers = pytest.importorskip(
-    "sentence_transformers",
-    reason="sentence-transformers not installed",
-)
-
-
-from partial_recall.embedding.providers.sentence_transformer import (  # noqa: E402
+from partial_recall.embedding.providers.sentence_transformer import (
     SentenceTransformerProvider,
 )
-from partial_recall.embedding.quantize import unpack_int8  # noqa: E402
-from partial_recall.embedding.types import DistanceMetric, Quantization  # noqa: E402
+from partial_recall.embedding.quantize import unpack_int8
+from partial_recall.embedding.types import DistanceMetric, Quantization
+
+
+class _FakeSentenceTransformer:
+    def __init__(self, model_name: str, device: str) -> None:
+        self.model_name = model_name
+        self.device = device
+
+    def get_sentence_embedding_dimension(self) -> int:
+        return 4
+
+    def encode(
+        self,
+        texts: list[str],
+        *,
+        normalize_embeddings: bool,
+        show_progress_bar: bool,
+        convert_to_numpy: bool,
+    ) -> np.ndarray:
+        assert normalize_embeddings is True
+        assert show_progress_bar is False
+        assert convert_to_numpy is True
+        return np.array([_fake_embedding(text) for text in texts], dtype=np.float32)
+
+
+def _fake_embedding(text: str) -> np.ndarray:
+    lowered = text.lower()
+    if "quantum" in lowered or "wave" in lowered:
+        return np.array([0.0, 0.0, 0.7071, 0.7071], dtype=np.float32)
+    if "caste" in lowered or "discrimination" in lowered:
+        return np.array([0.7071, 0.7071, 0.0, 0.0], dtype=np.float32)
+    if "rights" in lowered:
+        return np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+    return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
 @pytest.fixture(scope="module")
-def provider() -> SentenceTransformerProvider:
-    # Use the smallest available model to keep tests fast.
+def fake_sentence_transformers_module() -> types.ModuleType:
+    module = types.ModuleType("sentence_transformers")
+    module.SentenceTransformer = _FakeSentenceTransformer
+    return module
+
+
+@pytest.fixture
+def provider(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_sentence_transformers_module: types.ModuleType,
+) -> SentenceTransformerProvider:
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        fake_sentence_transformers_module,
+    )
     return SentenceTransformerProvider(
         model_name="intfloat/multilingual-e5-small", device="cpu"
     )
@@ -85,6 +129,7 @@ def test_similar_texts_closer_than_unrelated(provider: SentenceTransformerProvid
         "Caste discrimination in India.",
         "Quantum mechanics and wave functions.",
     ])
+
     def _vec(i: int) -> np.ndarray:
         return unpack_int8(batch.vectors[i]).astype(np.float32)
 
