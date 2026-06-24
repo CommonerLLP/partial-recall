@@ -32,12 +32,14 @@ The text-corpus story is shipped:
 - Local ONNX, Gemini, and sentence-transformer embedding providers.
 - SQLite vector store with FTS5 keyword search.
 - CLI commands for init, doctor, index, status, search, fetch, place, serve,
-  keyring, and discovery.
+  and keyring.
 - MCP tools for semantic search, full-text search, status, item details,
   collections, library search, fetch, placement, and new-title discovery.
 
-The old `place` and `fetch` scope specs are therefore closed. They should not
-be treated as open work.
+The old `place` scope is closed. The old `fetch` scope is no longer the live
+scope document, but it is only partly shipped: PDF attachment resolution and
+reading-order text extraction are covered; EPUB attachment fetch remains a
+known gap.
 
 ## Active Scope
 
@@ -90,6 +92,13 @@ Candidate backends to benchmark before adoption:
 
 No Surya or Chandra dependency should enter the default install without a
 benchmark against real CommonerLLP pages and a license review.
+
+### 4. Close Remaining Fetch Gaps
+
+The current `fetch` command handles Zotero PDF attachments. It does not yet
+resolve EPUB-only attachments through the same `item_key -> attachment -> file`
+path. If source-file retrieval for EPUB attachments is still required, implement
+it as a narrow extension of the existing fetch path, not as a new scope file.
 
 ## Engine Responsibilities
 
