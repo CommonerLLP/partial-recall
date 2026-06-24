@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 
 from partial_recall.config.loader import load_config
-from partial_recall.config.models import EmbeddingProviderName
+from partial_recall.config.models import EmbeddingProviderName, PartialRecallConfig
 from partial_recall.embedding.protocol import EmbeddingProvider
 from partial_recall.errors import (
     ConfigError,
@@ -110,7 +110,7 @@ async def _serve_with_signals(
     *,
     store: VectorStore,
     provider: EmbeddingProvider,
-    config: Any,
+    config: PartialRecallConfig,
 ) -> None:
     """Run the MCP stdio loop; install SIGINT/SIGTERM handlers that signal
     the loop to drain and exit."""

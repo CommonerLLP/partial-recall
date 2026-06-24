@@ -21,6 +21,49 @@ _VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 _VALID_FORMATS = {"human", "json"}
 
 
+class _LogStream:
+    """Writable stream proxy that survives pytest/Typer capture teardown."""
+
+    def __init__(self, stream: TextIO | None = None) -> None:
+        self._stream = stream
+
+    def _candidates(self) -> list[TextIO]:
+        streams: list[TextIO] = []
+        if self._stream is not None:
+            streams.append(self._stream)
+        streams.append(sys.stderr)
+        if sys.__stderr__ is not sys.stderr:
+            streams.append(sys.__stderr__)
+        return streams
+
+    def write(self, message: str) -> int:
+        for stream in self._candidates():
+            if getattr(stream, "closed", False):
+                continue
+            try:
+                return stream.write(message)
+            except ValueError:
+                continue
+        return len(message)
+
+    def flush(self) -> None:
+        for stream in self._candidates():
+            if getattr(stream, "closed", False):
+                continue
+            try:
+                stream.flush()
+                return
+            except ValueError:
+                continue
+
+    def isatty(self) -> bool:
+        for stream in self._candidates():
+            if getattr(stream, "closed", False):
+                continue
+            return stream.isatty() if hasattr(stream, "isatty") else False
+        return False
+
+
 def configure_logging(
     level: str = "INFO",
     format: str = "human",
@@ -40,13 +83,12 @@ def configure_logging(
             f"invalid log format {format!r}; expected one of {sorted(_VALID_FORMATS)}"
         )
 
-    if stream is None:
-        stream = sys.stderr
+    output_stream = _LogStream(stream)
 
     # Standard library logging — structlog forwards through it.
     logging.basicConfig(
         format="%(message)s",
-        stream=stream,
+        stream=output_stream,
         level=getattr(logging, level),
         force=True,
     )
@@ -73,7 +115,7 @@ def configure_logging(
         renderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer(
-            colors=stream.isatty() if hasattr(stream, "isatty") else False
+            colors=output_stream.isatty()
         )
 
     structlog.configure(
@@ -85,6 +127,6 @@ def configure_logging(
         ],
         wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, level)),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(file=stream),
+        logger_factory=structlog.PrintLoggerFactory(file=output_stream),
         cache_logger_on_first_use=False,
     )

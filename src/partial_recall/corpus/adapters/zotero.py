@@ -321,7 +321,7 @@ class ZoteroAdapter:
             except PdfExtractionError:
                 return None
         if source.source_type == "epub":
-            epub_path = self._resolve_pdf_path(source) # _resolve_pdf_path works for any attachment key
+            epub_path = self._resolve_pdf_path(source)
             if epub_path is None or not epub_path.exists():
                 return None
             return extract_epub_text(epub_path)

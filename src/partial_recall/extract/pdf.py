@@ -7,6 +7,7 @@ v0.3.0+ will add OCR (Tesseract / Kraken / Transkribus).
 from __future__ import annotations
 
 from pathlib import Path
+
 import fitz
 
 from partial_recall.errors import PartialRecallError

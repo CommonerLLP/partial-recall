@@ -45,7 +45,10 @@ FETCH_ITEM_TOOL: Tool = Tool(
             },
             "download_missing": {
                 "type": "boolean",
-                "description": "Whether to fallback to the Web API if the attachment is missing locally.",
+                "description": (
+                    "Whether to fallback to the Web API if the attachment "
+                    "is missing locally."
+                ),
                 "default": True,
             },
         },

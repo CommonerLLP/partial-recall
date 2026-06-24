@@ -12,14 +12,18 @@ store + provider and calls `run_stdio`.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import mcp.server.stdio
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from partial_recall.config.models import PartialRecallConfig
 from partial_recall.embedding.protocol import EmbeddingProvider
+from partial_recall.mcp.tools.fetch_item import (
+    FETCH_ITEM_TOOL,
+    handle_fetch_item,
+)
 from partial_recall.mcp.tools.get_item_details import (
     GET_ITEM_DETAILS_TOOL,
     handle_get_item_details,
@@ -35,10 +39,6 @@ from partial_recall.mcp.tools.list_collections import (
 from partial_recall.mcp.tools.place_item import (
     PLACE_ITEM_TOOL,
     handle_place_item,
-)
-from partial_recall.mcp.tools.fetch_item import (
-    FETCH_ITEM_TOOL,
-    handle_fetch_item,
 )
 from partial_recall.mcp.tools.search_fulltext import (
     SEARCH_FULLTEXT_TOOL,
@@ -57,7 +57,6 @@ from partial_recall.mcp.tools.whats_new import (
     handle_whats_new,
 )
 from partial_recall.store.vector_store import VectorStore
-from partial_recall.config.models import PartialRecallConfig
 
 
 def build_server(
@@ -101,7 +100,13 @@ def build_server(
         if name == LIST_COLLECTIONS_TOOL.name:
             return await handle_list_collections(args, store=store)
         if name == LIBRARY_SEARCH_TOOL.name:
-            return await handle_library_search(args, zotero_sqlite_path=config.zotero.sqlite_path if config.zotero.enabled else None)
+            zotero_sqlite_path = (
+                config.zotero.sqlite_path if config.zotero.enabled else None
+            )
+            return await handle_library_search(
+                args,
+                zotero_sqlite_path=zotero_sqlite_path,
+            )
         if name == PLACE_ITEM_TOOL.name:
             return await handle_place_item(args, store=store, provider=provider)
         if name == FETCH_ITEM_TOOL.name:
@@ -110,14 +115,18 @@ def build_server(
             return await handle_whats_new(args, store=store, provider=provider)
         # Unknown tool: return a structured error rather than raising, so
         # the MCP loop survives misrouted requests.
-        return [TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": f"Unknown tool: {name}",
-                 "hint": "List available tools via the MCP list_tools request."},
-                indent=2,
-            ),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": f"Unknown tool: {name}",
+                        "hint": "List available tools via the MCP list_tools request.",
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
     return server
 

@@ -50,7 +50,10 @@ def fetch_command(
     storage, and falls back to the Zotero Web API if needed.
     """
     if corpus != "zotero":
-        console.print(f"[bold red]Error:[/] Unsupported corpus '{corpus}'. Only 'zotero' is supported.")
+        console.print(
+            f"[bold red]Error:[/] Unsupported corpus '{corpus}'. "
+            "Only 'zotero' is supported."
+        )
         raise typer.Exit(1)
 
     cfg_path = config if config else config_path()
@@ -67,7 +70,7 @@ def fetch_command(
         sqlite_path=cfg.zotero.sqlite_path,
         storage_path=cfg.zotero.storage_path,
     )
-    
+
     cache_dir = download_cache_dir() / "zotero"
 
     try:
@@ -84,7 +87,7 @@ def fetch_command(
             console.print(json.dumps({"error": str(e)}))
         else:
             console.print(f"[bold red]Fetch Failed:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     finally:
         adapter.close()
 
