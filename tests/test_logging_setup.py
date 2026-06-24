@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from io import StringIO
 
 import structlog
@@ -29,6 +30,22 @@ def test_configure_json_format_emits_json() -> None:
     parsed = json.loads(line)
     assert parsed["event"] == "hello"
     assert parsed["item_key"] == "ABC123"
+
+
+def test_configure_logging_does_not_keep_closed_default_stderr(monkeypatch) -> None:
+    original_stderr = StringIO()
+    fallback_stderr = StringIO()
+    monkeypatch.setattr(sys, "stderr", original_stderr)
+
+    configure_logging(level="WARNING", format="human")
+
+    original_stderr.close()
+    monkeypatch.setattr(sys, "stderr", fallback_stderr)
+
+    log = structlog.get_logger("test")
+    log.warning("after-close")
+
+    assert "after-close" in fallback_stderr.getvalue()
 
 
 def test_invalid_format_raises_value_error() -> None:

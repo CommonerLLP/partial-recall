@@ -17,11 +17,11 @@ MARGINALIZED_TERMS = [
 ]
 _MARGINALIZED_RE = re.compile("|".join(MARGINALIZED_TERMS), re.IGNORECASE)
 
-def is_marginalized_focus(release: "Release") -> bool:
+def is_marginalized_focus(release: Release) -> bool:
     """True if the text (title/subjects) signals focus on the marginalized majority."""
     text = f"{release.title} {release.subjects}"
     return bool(_MARGINALIZED_RE.search(text))
 
-def apply_marginalized_first_positioning(releases: list["Release"]) -> list["Release"]:
+def apply_marginalized_first_positioning(releases: list[Release]) -> list[Release]:
     """Sort releases so that marginalized-focused works appear first."""
     return sorted(releases, key=lambda r: (not is_marginalized_focus(r), r.title))

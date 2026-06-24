@@ -3,11 +3,15 @@ CLAUDE.md
 AGENTS.md
 GEMINI.md
 WORKING.md
+CONTEXT.md
+.claude/
 
 # Local research / coordination notes — NEVER committed
 # (per CommonerLLP _org/private-repos.md)
 notes/
 memory/
+data
+data/
 
 # Local agent-orchestration plans / specs / handoffs — NEVER committed
 docs/superpowers/
@@ -89,6 +93,7 @@ desktop.ini
 # IDE
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
 *~

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
-import urllib.request
 import urllib.error
-from pathlib import Path
+import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
+from partial_recall.config.models import ZoteroConfig
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.extract.pdf import extract_pdf_text
-from partial_recall.config.models import ZoteroConfig
 
 
 @dataclass
@@ -30,16 +30,21 @@ def fetch_zotero_attachment(
     extract_text: bool = False,
 ) -> FetchResult:
     """Fetch the source file for a given item key, resolving the attachment."""
-    
+
     # 1. Parent resolution
     row = adapter._conn.execute(
-        "SELECT itemID FROM items WHERE key = ? AND itemID NOT IN (SELECT itemID FROM deletedItems)", 
-        (item_key,)
+        """
+        SELECT itemID
+        FROM items
+        WHERE key = ?
+          AND itemID NOT IN (SELECT itemID FROM deletedItems)
+        """,
+        (item_key,),
     ).fetchone()
-    
+
     if not row:
         raise ValueError(f"Item '{item_key}' not found in local Zotero DB or is deleted.")
-        
+
     parent_id = row["itemID"]
 
     # 2. Get attachments (prefer PDFs)
@@ -71,7 +76,7 @@ def fetch_zotero_attachment(
         # Zotero doesn't store the base attachment directory in sqlite in a simple way
         # it might be in prefs.js. For now, we return absolute if it's absolute, else error.
         pass
-        
+
     local_dir = adapter.storage_path / att_key
     if local_dir.exists():
         for f in local_dir.iterdir():
@@ -88,7 +93,10 @@ def fetch_zotero_attachment(
     group_id = config.group_id or os.environ.get("ZOTERO_GROUP_ID")
 
     if not api_key:
-        raise ValueError("Attachment not found locally and ZOTERO_API_KEY not provided for Web API fallback")
+        raise ValueError(
+            "Attachment not found locally and ZOTERO_API_KEY not provided "
+            "for Web API fallback"
+        )
 
     # Determine URL
     # In Zotero, libraryID 1 is usually the user library.
@@ -99,22 +107,25 @@ def fetch_zotero_attachment(
     elif user_id:
         url = f"https://api.zotero.org/users/{user_id}/items/{att_key}/file"
     else:
-        raise ValueError("Attachment not found locally and ZOTERO_USER_ID or ZOTERO_GROUP_ID not provided")
+        raise ValueError(
+            "Attachment not found locally and ZOTERO_USER_ID or "
+            "ZOTERO_GROUP_ID not provided"
+        )
 
     req = urllib.request.Request(url, headers={"Zotero-API-Key": api_key})
-    
+
     filename = "attachment.pdf"
     if path_val.startswith("storage:"):
         filename = path_val.split(":", 1)[1]
 
     cache_file = cache_dir / att_key / filename
     cache_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         with urllib.request.urlopen(req) as resp, open(cache_file, "wb") as out:
             out.write(resp.read())
     except urllib.error.HTTPError as e:
         raise ValueError(f"Failed to fetch attachment from Zotero API: HTTP {e.code}") from e
-        
+
     text = extract_pdf_text(cache_file) if extract_text else None
     return FetchResult(item_key, att_key, cache_file, text, "web", content_type)

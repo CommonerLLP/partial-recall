@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 from typer.testing import CliRunner
+
 from partial_recall.cli.app import app
 
 runner = CliRunner()
