@@ -1,5 +1,10 @@
 # Scope of work — attachment fetch / clean-text retrieval
 
+> Archived implementation input. The canonical current scope is
+> [`../SCOPE.md`](../SCOPE.md). As of `v0.3.1`, `partial-recall fetch` and
+> reading-order PDF extraction are shipped; do not treat this file as an active
+> scope document.
+
 > Authored 2026-06-19 from a **governingclaste** session (sister consumer). Drop-in
 > spec for the next partial-recall agent. Read `docs/ARCHITECTURE.md` first; claim
 > scope in `WORKING.md` before editing code. governingclaste explicitly declined to

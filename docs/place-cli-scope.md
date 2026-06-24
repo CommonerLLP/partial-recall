@@ -1,5 +1,9 @@
 # Scope of work — `partial-recall place` CLI
 
+> Archived implementation input. The canonical current scope is
+> [`../SCOPE.md`](../SCOPE.md). As of `v0.3.1`, `partial-recall place` is shipped;
+> do not treat this file as an active scope document.
+
 > Authored 2026-06-18 from an **ahara** session (sister tool). Drop-in spec for the
 > next partial-recall agent. Read `docs/ARCHITECTURE.md` and `docs/discovery.md`
 > first; claim scope in `WORKING.md` before editing code.
