@@ -1,4 +1,4 @@
-.PHONY: help sync-agents deps deps-local deps-gemini deps-all test lint typecheck clean
+.PHONY: help sync-agents deps deps-local deps-gemini deps-all hooks test lint typecheck clean
 
 help:
 	@echo "partial-recall — common dev tasks"
@@ -8,6 +8,7 @@ help:
 	@echo "  make deps-local    Install dev + local-embedding deps"
 	@echo "  make deps-gemini   Install dev + gemini deps"
 	@echo "  make deps-all      Install everything"
+	@echo "  make hooks         Install local pre-commit hook"
 	@echo "  make test          Run pytest"
 	@echo "  make lint          Run ruff check"
 	@echo "  make typecheck     Run mypy strict"
@@ -27,6 +28,9 @@ deps-gemini:
 
 deps-all:
 	pip install -e ".[dev,all]"
+
+hooks:
+	install -m 0755 scripts/pre-commit .git/hooks/pre-commit
 
 test:
 	pytest
