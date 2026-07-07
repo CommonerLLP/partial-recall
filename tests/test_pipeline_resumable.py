@@ -364,3 +364,76 @@ def test_extend_survives_concurrent_writer_race(store: VectorStore) -> None:
         (found[0], first.run_id),
     ))
     assert rows[0]["n"] == 1
+
+
+class _StaleFindStore(VectorStore):
+    """Simulates the chunk-insert race window: a concurrent extend
+    writer commits item B's chunk between this process's find_chunk_id
+    (which saw nothing) and its insert. Modeled by serving one stale
+    None for item B even though the row already exists."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(path)
+        self._stale_served = False
+
+    def find_chunk_id(self, **kwargs):  # type: ignore[no-untyped-def]
+        if kwargs.get("item_key") == "B" and not self._stale_served:
+            self._stale_served = True
+            return None
+        return super().find_chunk_id(**kwargs)
+
+
+class _RefAdapter(_Adapter):
+    """Adapter whose sources carry a non-NULL source_ref — the case
+    where the chunks identity UNIQUE constraint actually bites (SQLite
+    unique indexes treat NULL source_ref values as distinct rows)."""
+
+    def get_sources(self, item: Item) -> Iterator[Source]:
+        yield Source(source_type="abstract", source_ref="abs:0", kind=ItemKind.METADATA)
+
+
+def test_extend_survives_concurrent_chunk_insert_race(tmp_path: Path) -> None:
+    """Two `index --extend` processes race on creating the same new
+    chunk. The loser must adopt the winner's row and finish, not die
+    on the chunks identity UNIQUE constraint."""
+    from partial_recall.index.pipeline import _now_iso, _text_hash
+
+    store = _StaleFindStore(tmp_path / "vectors.sqlite")
+    try:
+        first = run_indexing(
+            adapter=_RefAdapter([("A", "alpha")]), store=store, provider=_Provider(),
+        )
+        # The concurrent winner has already committed item B and its chunk
+        # (but not yet its vector) when the loser reaches insert time.
+        store.upsert_item(
+            item_key="B", corpus="test", item_type="book",
+            title="Item B", date=None, creators_json="[]", abstract="bravo",
+            metadata_hash="hash-B", last_indexed_at=_now_iso(),
+            corpus_ref=None,
+        )
+        store.insert_chunk(
+            item_key="B", corpus="test", source_type="abstract",
+            source_ref="abs:0", chunk_index=0,
+            char_offset_start=0, char_offset_end=5,
+            text_hash=_text_hash("bravo"), text_preview="bravo",
+            chunker_version=CHUNKER_VERSION, detected_locale=None,
+            indexed_at=_now_iso(),
+        )
+        result = run_indexing(
+            adapter=_RefAdapter([("A", "alpha"), ("B", "bravo")]),
+            store=store,
+            provider=_Provider(),
+            extend_run_id=first.run_id,
+        )
+        assert result.extended
+        assert not result.interrupted
+        # The raced chunk was adopted, not re-created or double-counted.
+        assert result.chunk_count == 0
+        rows = list(store._conn.execute(
+            "SELECT COUNT(*) AS n FROM chunks WHERE item_key = 'B'",
+        ))
+        assert rows[0]["n"] == 1
+        # The winner had not embedded yet, so the loser supplies the vector.
+        assert result.new_vector_count == 1
+    finally:
+        store.close()

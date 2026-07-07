@@ -213,3 +213,41 @@ def test_insert_vector_if_absent_is_idempotent(store: VectorStore) -> None:
         (chunk_id, run_id),
     ))
     assert rows[0]["n"] == 1
+
+
+def test_insert_chunk_if_absent_resolves_to_existing_row(store: VectorStore) -> None:
+    """Extend mode must adopt a chunk committed by a concurrent
+    writer between find_chunk_id and the insert, not abort on the
+    chunks identity UNIQUE constraint."""
+    store.upsert_item(
+        item_key="ABC", corpus="zotero", item_type="pdf",
+        title="t", date=None, creators_json='[]', abstract=None,
+        metadata_hash="h", last_indexed_at=_now_iso(),
+        corpus_ref=None,
+    )
+    first_id, first_hash, first_inserted = store.insert_chunk_if_absent(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t1", text_preview="hello",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    second_id, second_hash, second_inserted = store.insert_chunk_if_absent(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t2", text_preview="hello again",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    assert first_inserted is True
+    assert first_hash == "t1"
+    assert second_inserted is False
+    assert second_id == first_id
+    # The loser sees the winner's stored hash so content drift stays detectable.
+    assert second_hash == "t1"
+    rows = list(store._conn.execute(
+        "SELECT COUNT(*) AS n FROM chunks WHERE item_key = 'ABC'",
+    ))
+    assert rows[0]["n"] == 1

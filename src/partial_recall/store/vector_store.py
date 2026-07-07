@@ -412,6 +412,62 @@ class VectorStore:
         assert cur.lastrowid is not None  # AUTOINCREMENT INSERT always sets it
         return int(cur.lastrowid)
 
+    def insert_chunk_if_absent(
+        self,
+        *,
+        item_key: str,
+        corpus: str,
+        source_type: str,
+        source_ref: str | None,
+        chunk_index: int,
+        char_offset_start: int | None,
+        char_offset_end: int | None,
+        text_hash: str,
+        text_preview: str | None,
+        chunker_version: str,
+        detected_locale: str | None,
+        indexed_at: str,
+    ) -> tuple[int, str, bool]:
+        """Insert a chunk unless its identity tuple already exists.
+
+        Returns (chunk_id, stored_text_hash, inserted). Extend mode uses
+        this instead of insert_chunk: a concurrent extend writer can create
+        the chunk between find_chunk_id and the insert, and losing that
+        race must resolve to the winner's row, not abort the run.
+        """
+        cur = self._conn.execute(
+            """
+            INSERT OR IGNORE INTO chunks (
+                item_key, corpus, source_type, source_ref, chunk_index,
+                char_offset_start, char_offset_end, text_hash, text_preview,
+                chunker_version, detected_locale, indexed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item_key, corpus, source_type, source_ref, chunk_index,
+                char_offset_start, char_offset_end, text_hash, text_preview,
+                chunker_version, detected_locale, indexed_at,
+            ),
+        )
+        if cur.rowcount == 1:
+            assert cur.lastrowid is not None  # AUTOINCREMENT INSERT always sets it
+            return int(cur.lastrowid), text_hash, True
+        found = self.find_chunk_id(
+            item_key=item_key,
+            corpus=corpus,
+            source_type=source_type,
+            source_ref=source_ref,
+            chunk_index=chunk_index,
+            chunker_version=chunker_version,
+            text_hash=text_hash,
+        )
+        if found is None:  # pragma: no cover — insert ignored yet row absent
+            raise RuntimeError(
+                "chunk neither inserted nor found: "
+                f"{corpus}/{item_key}/{source_type}/{source_ref}#{chunk_index}"
+            )
+        return found[0], found[1], False
+
     def find_chunk_id(
         self,
         *,
