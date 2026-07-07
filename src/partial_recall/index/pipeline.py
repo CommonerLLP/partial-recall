@@ -30,6 +30,7 @@ from partial_recall.chunk.recursive_char import CHUNKER_VERSION, chunk_text
 from partial_recall.corpus.protocol import CorpusAdapter
 from partial_recall.corpus.types import Item
 from partial_recall.embedding.protocol import EmbeddingProvider
+from partial_recall.store.index_lock import IndexLock
 from partial_recall.store.vector_store import VectorStore
 
 # A progress callback receives: the current item, its 1-based index, and
@@ -85,6 +86,38 @@ def _text_hash(s: str) -> str:
 
 
 def run_indexing(
+    *,
+    adapter: CorpusAdapter,
+    store: VectorStore,
+    provider: EmbeddingProvider,
+    batch_size: int = 32,
+    activate: bool = True,
+    extend_run_id: int | None = None,
+    allow_provider_mismatch: bool = False,
+    on_item_start: ProgressCallback | None = None,
+) -> IndexResult:
+    """Run an indexing pass under the single-writer index lock.
+
+    Raises IndexLockHeldError if another index process is already writing
+    to this vector DB — concurrent runs are race-safe but duplicate
+    embedding spend, so the second writer fails fast instead.
+
+    See _run_indexing for the indexing contract.
+    """
+    with IndexLock(store.db_path):
+        return _run_indexing(
+            adapter=adapter,
+            store=store,
+            provider=provider,
+            batch_size=batch_size,
+            activate=activate,
+            extend_run_id=extend_run_id,
+            allow_provider_mismatch=allow_provider_mismatch,
+            on_item_start=on_item_start,
+        )
+
+
+def _run_indexing(
     *,
     adapter: CorpusAdapter,
     store: VectorStore,
