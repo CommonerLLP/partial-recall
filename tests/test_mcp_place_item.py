@@ -82,6 +82,13 @@ def test_tool_schema_requires_title() -> None:
     assert "title" in schema.get("required", [])
 
 
+def test_corpus_filter_accepts_any_corpus_name() -> None:
+    """The corpus filter must not carry a closed enum: external adapters
+    register corpora whose names a hardcoded list can never anticipate."""
+    schema = PLACE_ITEM_TOOL.inputSchema
+    assert "enum" not in schema["properties"]["corpus"]
+
+
 @pytest.mark.asyncio
 async def test_missing_title_returns_error(store_with_two_items: VectorStore) -> None:
     result = await handle_place_item(

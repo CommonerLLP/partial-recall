@@ -107,6 +107,54 @@ def test_tool_schema_has_required_fields() -> None:
     assert "query" in schema.get("required", [])
 
 
+def test_corpus_filter_accepts_any_corpus_name() -> None:
+    """The corpus filter must not carry a closed enum: external adapters
+    register corpora (e.g. via dotted-path registry entries) whose names a
+    hardcoded list can never anticipate, and the live DB already holds
+    corpora outside the built-in adapter set."""
+    schema = SEMANTIC_SEARCH_TOOL.inputSchema
+    assert "enum" not in schema["properties"]["corpus"]
+
+
+@pytest.mark.asyncio
+async def test_handle_filters_by_external_corpus_name(tmp_path: Path) -> None:
+    """A corpus indexed under a non-built-in name is searchable via the
+    corpus filter end-to-end."""
+    store = VectorStore(tmp_path / "vectors.sqlite")
+    run_id = store.create_run(
+        provider="fake", model_name="fake", model_version="v1",
+        dimensions=4, quantization="int8", normalized=True,
+        distance_metric="cosine", chunker_name="char", chunker_version="v1",
+        started_at=_now(),
+    )
+    store.activate_run(run_id)
+    store.upsert_item(
+        item_key="GN001", corpus="gujarat_news", item_type="article",
+        title="Gujarat news item", date=None, creators_json="[]",
+        abstract=None, metadata_hash="hg1", last_indexed_at=_now(),
+        corpus_ref=None,
+    )
+    cid = store.insert_chunk(
+        item_key="GN001", corpus="gujarat_news", source_type="pdf",
+        source_ref=None, chunk_index=0, char_offset_start=0,
+        char_offset_end=100, text_hash="tg1", text_preview="gujarat chunk",
+        chunker_version="v1", detected_locale=None, indexed_at=_now(),
+    )
+    store.insert_vector(
+        chunk_id=cid, run_id=run_id,
+        vector=_vec([127, 0, 0, 0]), norm=None, indexed_at=_now(),
+    )
+    result = await handle_semantic_search(
+        arguments={"query": "anything", "corpus": "gujarat_news"},
+        store=store,
+        provider=FakeEmbeddingProvider(),
+    )
+    parsed = json.loads(result[0].text)
+    assert len(parsed["results"]) == 1
+    assert parsed["results"][0]["corpus"] == "gujarat_news"
+    store.close()
+
+
 @pytest.mark.asyncio
 async def test_handle_returns_textcontent_with_results(indexed_store) -> None:
     store, provider = indexed_store
