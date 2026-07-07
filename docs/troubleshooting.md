@@ -177,6 +177,20 @@ Check that `notes_path` points to the vault root (the folder containing your `.m
 
 The JabRef adapter resolves file links relative to the `.bib` file location. If your PDFs are in a different directory tree, use absolute paths in your JabRef file links, or symlink the PDFs next to the `.bib` file.
 
+## "index lock is held by another process"
+
+Since v0.3.2, one `partial-recall index` writer runs per vector DB. A
+second `index` / `index --extend` against the same DB exits immediately
+with this error instead of duplicating embedding spend — the check runs
+before the model loads, so the failed command costs nothing.
+
+Wait for the running index to finish (or stop it), then rerun. The lock
+lives in a `<vector-db>.indexlock` file next to your vector DB and is
+released automatically when the indexing process exits — including
+crashes and `kill -9` — so there is never a stale lock to clean up.
+Deleting the `.indexlock` file does not force-release anything; the
+lock is held by the running process, not the file's existence.
+
 ## I want to use partial-recall offline / on a plane
 
 That's the default. With `[embedding] provider = "local-onnx"` and
