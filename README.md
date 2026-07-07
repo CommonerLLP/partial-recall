@@ -38,8 +38,8 @@ partial-recall init       # hardware-aware wizard; writes config.toml
 partial-recall doctor     # diagnostic checks against your install
 partial-recall index      # builds the vector index from your corpus
 partial-recall search "your query"
-partial-recall fetch <item_key>  # fetch clean reading-order text from an item's attachment
-partial-recall place "title"     # place a candidate work against the existing corpus
+partial-recall fetch <item_key> --text  # print clean reading-order text from an item's attachment
+partial-recall place --title "title"    # place a candidate work against the existing corpus
 ```
 
 For a step-by-step walkthrough see [docs/walkthrough/five-minute-walkthrough.md](./docs/walkthrough/five-minute-walkthrough.md).

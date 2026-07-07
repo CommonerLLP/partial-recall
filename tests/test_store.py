@@ -171,3 +171,83 @@ def test_activate_run_deactivates_others(store: VectorStore) -> None:
     active = store.get_active_run()
     assert active is not None
     assert active.run_id == rid2
+
+
+def test_insert_vector_if_absent_is_idempotent(store: VectorStore) -> None:
+    """Extend mode must tolerate a vector committed by a
+    concurrent writer between queue time and flush time."""
+    run_id = store.create_run(
+        provider="local-onnx", model_name="e5", model_version="v1",
+        dimensions=4, quantization="int8", normalized=True,
+        distance_metric="cosine", chunker_name="c", chunker_version="v1",
+        started_at=_now_iso(),
+    )
+    store.upsert_item(
+        item_key="ABC", corpus="zotero", item_type="pdf",
+        title="t", date=None, creators_json='[]', abstract=None,
+        metadata_hash="h", last_indexed_at=_now_iso(),
+        corpus_ref=None,
+    )
+    chunk_id = store.insert_chunk(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t1", text_preview="hello",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    first = store.insert_vector_if_absent(
+        chunk_id=chunk_id, run_id=run_id,
+        vector=_make_int8_vector([127, 0, 0, 0]),
+        norm=None, indexed_at=_now_iso(),
+    )
+    second = store.insert_vector_if_absent(
+        chunk_id=chunk_id, run_id=run_id,
+        vector=_make_int8_vector([0, 127, 0, 0]),
+        norm=None, indexed_at=_now_iso(),
+    )
+    assert first is True
+    assert second is False
+    rows = list(store._conn.execute(
+        "SELECT COUNT(*) AS n FROM vectors WHERE chunk_id = ? AND run_id = ?",
+        (chunk_id, run_id),
+    ))
+    assert rows[0]["n"] == 1
+
+
+def test_insert_chunk_if_absent_resolves_to_existing_row(store: VectorStore) -> None:
+    """Extend mode must adopt a chunk committed by a concurrent
+    writer between find_chunk_id and the insert, not abort on the
+    chunks identity UNIQUE constraint."""
+    store.upsert_item(
+        item_key="ABC", corpus="zotero", item_type="pdf",
+        title="t", date=None, creators_json='[]', abstract=None,
+        metadata_hash="h", last_indexed_at=_now_iso(),
+        corpus_ref=None,
+    )
+    first_id, first_hash, first_inserted = store.insert_chunk_if_absent(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t1", text_preview="hello",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    second_id, second_hash, second_inserted = store.insert_chunk_if_absent(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t2", text_preview="hello again",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    assert first_inserted is True
+    assert first_hash == "t1"
+    assert second_inserted is False
+    assert second_id == first_id
+    # The loser sees the winner's stored hash so content drift stays detectable.
+    assert second_hash == "t1"
+    rows = list(store._conn.execute(
+        "SELECT COUNT(*) AS n FROM chunks WHERE item_key = 'ABC'",
+    ))
+    assert rows[0]["n"] == 1

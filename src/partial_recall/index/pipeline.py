@@ -197,13 +197,35 @@ def run_indexing(
             pending.clear()
             return 0
         for chunk_id, vec in zip(chunk_ids, batch.vectors, strict=True):
-            store.insert_vector(
-                chunk_id=chunk_id,
-                run_id=run_id,
-                vector=vec,
-                norm=None,
-                indexed_at=_now_iso(),
-            )
+            if extended:
+                # Extend mode tolerates a concurrent index process: the
+                # queue-time vector_exists guard cannot see vectors another
+                # writer commits between queue time and this flush, and the
+                # committed vector is equally valid.
+                inserted = store.insert_vector_if_absent(
+                    chunk_id=chunk_id,
+                    run_id=run_id,
+                    vector=vec,
+                    norm=None,
+                    indexed_at=_now_iso(),
+                )
+                if not inserted:
+                    log.warning(
+                        "indexing.vector.already_present",
+                        chunk_id=chunk_id,
+                        run_id=run_id,
+                    )
+                    continue
+            else:
+                # A fresh run owns its run_id exclusively; a collision here
+                # is a pipeline bug and must surface, not be swallowed.
+                store.insert_vector(
+                    chunk_id=chunk_id,
+                    run_id=run_id,
+                    vector=vec,
+                    norm=None,
+                    indexed_at=_now_iso(),
+                )
             new_vector_count += 1
         written = len(pending)
         pending.clear()
@@ -303,7 +325,37 @@ def run_indexing(
                     text_hash=th,
                 )
                 content_changed = False
-                if found is None:
+                if found is None and extended:
+                    # Extend mode tolerates a concurrent index process: a
+                    # writer that creates this chunk between find_chunk_id
+                    # and the insert wins the race, and this process must
+                    # adopt the winner's row instead of aborting on the
+                    # chunks identity UNIQUE constraint.
+                    chunk_id, stored_hash, inserted = store.insert_chunk_if_absent(
+                        item_key=item.item_key,
+                        corpus=item.corpus,
+                        source_type=source.source_type,
+                        source_ref=source.source_ref,
+                        chunk_index=chunk.chunk_index,
+                        char_offset_start=chunk.char_offset_start,
+                        char_offset_end=chunk.char_offset_end,
+                        text_hash=th,
+                        text_preview=preview,
+                        chunker_version=CHUNKER_VERSION,
+                        detected_locale=None,  # locale detection deferred
+                        indexed_at=_now_iso(),
+                    )
+                    if inserted:
+                        chunk_count += 1
+                    else:
+                        log.warning(
+                            "indexing.chunk.already_present",
+                            chunk_id=chunk_id,
+                        )
+                        content_changed = stored_hash != th
+                elif found is None:
+                    # A fresh run walking a quiet store: a collision here
+                    # is a pipeline bug and must surface, not be swallowed.
                     chunk_id = store.insert_chunk(
                         item_key=item.item_key,
                         corpus=item.corpus,
