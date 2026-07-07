@@ -177,3 +177,20 @@ def test_version_flag() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "partial-recall" in result.stdout
+
+
+def test_version_matches_package_metadata() -> None:
+    """`--version` prints partial_recall.__version__, which is set by hand
+    and can silently diverge from pyproject.toml at release time (it did
+    in the 0.3.2 release PR; caught by review). Keep them locked."""
+    import tomllib
+
+    import partial_recall
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    with pyproject.open("rb") as fh:
+        declared = tomllib.load(fh)["project"]["version"]
+    assert partial_recall.__version__ == declared
+
+    result = runner.invoke(app, ["--version"])
+    assert declared in result.stdout

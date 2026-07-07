@@ -212,7 +212,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Roadmap and status
 
-**Current release: v0.3.1.**
+**Current release: v0.3.2.**
 
 See [SCOPE.md](./SCOPE.md) for the current project boundary.
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
