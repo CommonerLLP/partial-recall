@@ -193,7 +193,7 @@ changes; no version bump (still v0.2.4 on main).
 - [x] `CalibreAdapter` (Calibre e-book library via `metadata.db`; no Calibre install required; EPUB + PDF + TXT)
 - [x] EPUB extractor (stdlib zip + html.parser; no ebooklib dep)
 - [x] DOCX extractor (stdlib zip + xml.etree; no python-docx dep; for humanities scholars using Word)
-- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.4.0).
+- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned for the future multilingual release).
 - [x] Hardware-aware, language-aware init wizard — detects RAM + chip, surveys corpus languages, shows ranked model ladder with provenance (maintainer, HQ country, open-weights, license, documented military contracts, data sovereignty)
 - [x] Pre-release liability disclaimer in init wizard and README
 - [x] `[embedding] device = "auto"` config field (CUDA → MPS → CPU auto-detection)
@@ -201,23 +201,48 @@ changes; no version bump (still v0.2.4 on main).
 - [x] Fix: Zotero collection sync used closed adapter connection
 - [x] `partial-recall doctor --fix` (iCloud UF_HIDDEN fix for .pth files)
 
-**Deferred to v0.4.0 or later:**
+**Deferred to future versions:**
 - [/] Locale-aware embedding routing (Tamil chunks → Tamil-strong embedder; Persian → Persian-strong)
 - [/] i18n: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese interface strings
 - [/] Better chunking: semantic-aware via `blingfire` or `spaCy`; tokenizer-aware for CJK
 - [/] Snapshot / web indexing (Zotero webpage captures)
 - [/] Optional Zotero plugin (triggers indexing from Zotero UI)
 
-## v0.4.0 — Multilingual for real
+## v0.4.0 — Engine hardening and shared-corpus correctness (proposed scope)
+
+The engine now serves multiple corpora and concurrent indexing
+processes. v0.4.0 makes multi-writer, multi-corpus operation boring:
+no races, no duplicate spend, no stale search hits, no closed-world
+assumptions about corpus names.
+
+- [x] Survive concurrent `index --extend` writers: race-safe vector AND
+  chunk inserts (adopt-the-winner semantics; fresh runs stay strict)
+- [~] Single-writer advisory index lock — second writer fails fast instead
+  of duplicating embedding spend (PR #35)
+- [~] Open corpus filters: drop closed corpus enums from MCP tools so
+  external-adapter corpora are searchable (PR #34)
+- [ ] Stable folder-root identifier for `source_ref` — stop orphaning
+  chunks when config roots are reordered — plus a dedup/cleanup pass for
+  the existing drift (orphaned pre-v0.2.4 absolute-path rows included)
+- [ ] FTS results filtered to chunks with a vector in the active run —
+  orphaned/duplicate rows must not surface as search hits
+- [ ] EPUB-only attachment fetch (the known gap scoped in `SCOPE.md`)
+- [ ] External adapter packaging story: document how an external
+  adapter package becomes importable from the engine's environment
+  (dotted-path loading works; needs an install/entry-point convention)
+
+## Future — Multilingual for real (unscheduled)
 
 - [ ] Local manuscript image adapter (Tropy-compatible directory layout)
 - [ ] SigLIP multimodal embeddings for figures and plates in PDFs
 - [ ] Vision-LLM HTR pipeline (starts; pluggable backend)
+- [ ] OCR/HTR backend evaluation: benchmark Tesseract, Kraken, Surya, and
+  Chandra against real scanned/manuscript pages before adopting any
 - [ ] Tesseract integration for printed text
 - [ ] Kraken integration for historical scripts (Greek, Latin, Devanagari, Arabic)
 - [ ] CITATION.cff + Zenodo DOI integration
 
-## v0.5.0 — IIIF and world manuscript archives
+## Future — IIIF and world manuscript archives (unscheduled; builds on the multilingual/HTR stack)
 
 - [ ] IIIF Image API + Presentation API support
 - [ ] Adapter for British Library digitised manuscripts
