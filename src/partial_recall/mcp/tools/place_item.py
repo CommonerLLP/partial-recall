@@ -62,10 +62,11 @@ PLACE_ITEM_TOOL: Tool = Tool(
             "corpus": {
                 "type": "string",
                 "description": (
-                    "Optional: restrict the neighbourhood to one corpus "
-                    "(e.g. 'zotero'). Omit to position against everything."
+                    "Optional: restrict the neighbourhood to one corpus. Any "
+                    "corpus name present in the index is valid — built-in "
+                    "adapters and external-adapter corpora alike. Omit to "
+                    "position against everything."
                 ),
-                "enum": ["zotero", "folder", "markdown_notes", "jabref", "calibre"],
             },
         },
         "additionalProperties": False,

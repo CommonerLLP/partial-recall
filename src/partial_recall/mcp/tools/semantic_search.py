@@ -46,10 +46,12 @@ SEMANTIC_SEARCH_TOOL: Tool = Tool(
             "corpus": {
                 "type": "string",
                 "description": (
-                    "Optional filter: only search this corpus "
-                    "(e.g., 'zotero', 'folder', 'markdown_notes'). Omit for all."
+                    "Optional filter: only search this corpus. Any corpus name "
+                    "present in the index is valid (built-in adapters like "
+                    "'zotero', 'folder', 'markdown_notes', 'jabref', 'calibre' "
+                    "as well as external-adapter corpora). Use semantic_status "
+                    "to list the corpora in this index. Omit for all."
                 ),
-                "enum": ["zotero", "folder", "markdown_notes", "jabref", "calibre"],
             },
             "item_types": {
                 "type": "array",
