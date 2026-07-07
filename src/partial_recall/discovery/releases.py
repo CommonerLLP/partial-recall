@@ -26,6 +26,7 @@ import gzip
 import html as _html
 import json
 import re
+import sys
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -103,7 +104,7 @@ def _sru(cql: str, rows: int = 80, start: int = 1) -> str:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.read().decode("utf-8", "ignore")
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! LoC SRU fetch failed: {exc}")
+        print(f"  ! LoC SRU fetch failed: {exc}", file=sys.stderr)
         return ""
 
 
@@ -190,7 +191,7 @@ def _openlibrary(subject: list[str] | None, press: str | None,
         with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=45) as r:
             docs = json.loads(r.read()).get("docs", [])
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! OpenLibrary fetch failed: {exc}")
+        print(f"  ! OpenLibrary fetch failed: {exc}", file=sys.stderr)
         return []
     return _ol_parse(docs)
 
@@ -224,7 +225,7 @@ def _http(url: str) -> str:
                 raw = gzip.decompress(raw)
             return raw.decode("utf-8", "ignore")
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! fetch failed {url[:60]}: {exc}")
+        print(f"  ! fetch failed {url[:60]}: {exc}", file=sys.stderr)
         return ""
 
 
@@ -369,7 +370,7 @@ def _nbn(field: str, limit: int = 25, since: str | None = None) -> list[Release]
         with urllib.request.urlopen(req, timeout=60) as r:
             xml = r.read().decode("utf-8", "ignore")
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! NBN fetch failed: {exc}")
+        print(f"  ! NBN fetch failed: {exc}", file=sys.stderr)
         return []
     recs = _nbn_parse(xml)
     if since:
@@ -503,7 +504,7 @@ def sweep_presses(mark_checked: bool = True) -> dict:
     out = {}
     for p in load_presses():
         if p.get("source", {}).get("type") == "sitemap":
-            print(f"Sweeping {p['name']}...")
+            print(f"Sweeping {p['name']}...", file=sys.stderr)
             res = press_new_from_sitemap(p, mark=mark_checked)
             if res["results"]:
                 res["results"] = apply_marginalized_first_positioning(res["results"])

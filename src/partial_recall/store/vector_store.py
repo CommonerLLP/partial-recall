@@ -527,6 +527,32 @@ class VectorStore:
             (chunk_id, run_id, vector, norm, indexed_at),
         )
 
+    def insert_vector_if_absent(
+        self,
+        *,
+        chunk_id: int,
+        run_id: int,
+        vector: bytes,
+        norm: float | None,
+        indexed_at: str,
+    ) -> bool:
+        """Insert a vector unless (chunk_id, run_id) already has one.
+
+        Returns True if a row was written, False if one already existed.
+        Extend mode uses this instead of insert_vector: the queue-time
+        vector_exists guard cannot see vectors a concurrent index process
+        commits between queue time and flush time, and that race must not
+        abort the run (the committed vector is equally valid).
+        """
+        cur = self._conn.execute(
+            """
+            INSERT OR IGNORE INTO vectors (chunk_id, run_id, vector, norm, indexed_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (chunk_id, run_id, vector, norm, indexed_at),
+        )
+        return cur.rowcount == 1
+
     def top_k_int8(
         self,
         *,

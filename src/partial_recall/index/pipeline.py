@@ -197,13 +197,35 @@ def run_indexing(
             pending.clear()
             return 0
         for chunk_id, vec in zip(chunk_ids, batch.vectors, strict=True):
-            store.insert_vector(
-                chunk_id=chunk_id,
-                run_id=run_id,
-                vector=vec,
-                norm=None,
-                indexed_at=_now_iso(),
-            )
+            if extended:
+                # Extend mode tolerates a concurrent index process: the
+                # queue-time vector_exists guard cannot see vectors another
+                # writer commits between queue time and this flush, and the
+                # committed vector is equally valid.
+                inserted = store.insert_vector_if_absent(
+                    chunk_id=chunk_id,
+                    run_id=run_id,
+                    vector=vec,
+                    norm=None,
+                    indexed_at=_now_iso(),
+                )
+                if not inserted:
+                    log.warning(
+                        "indexing.vector.already_present",
+                        chunk_id=chunk_id,
+                        run_id=run_id,
+                    )
+                    continue
+            else:
+                # A fresh run owns its run_id exclusively; a collision here
+                # is a pipeline bug and must surface, not be swallowed.
+                store.insert_vector(
+                    chunk_id=chunk_id,
+                    run_id=run_id,
+                    vector=vec,
+                    norm=None,
+                    indexed_at=_now_iso(),
+                )
             new_vector_count += 1
         written = len(pending)
         pending.clear()

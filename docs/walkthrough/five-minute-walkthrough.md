@@ -131,10 +131,10 @@ walkthrough).
 
 ```zsh
 # Once you find an item via search, you can fetch its raw text (e.g., from Zotero PDF)
-partial-recall fetch <item_key>
+partial-recall fetch <item_key> --text
 
 # Or place a candidate title against the existing corpus to see if you already have it
-partial-recall place "The Annihilation of Caste"
+partial-recall place --title "The Annihilation of Caste"
 ```
 
 ## 7. MCP server smoke (≈ 5s)

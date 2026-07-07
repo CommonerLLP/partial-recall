@@ -171,3 +171,45 @@ def test_activate_run_deactivates_others(store: VectorStore) -> None:
     active = store.get_active_run()
     assert active is not None
     assert active.run_id == rid2
+
+
+def test_insert_vector_if_absent_is_idempotent(store: VectorStore) -> None:
+    """Extend mode must tolerate a vector committed by a
+    concurrent writer between queue time and flush time."""
+    run_id = store.create_run(
+        provider="local-onnx", model_name="e5", model_version="v1",
+        dimensions=4, quantization="int8", normalized=True,
+        distance_metric="cosine", chunker_name="c", chunker_version="v1",
+        started_at=_now_iso(),
+    )
+    store.upsert_item(
+        item_key="ABC", corpus="zotero", item_type="pdf",
+        title="t", date=None, creators_json='[]', abstract=None,
+        metadata_hash="h", last_indexed_at=_now_iso(),
+        corpus_ref=None,
+    )
+    chunk_id = store.insert_chunk(
+        item_key="ABC", corpus="zotero",
+        source_type="pdf", source_ref="pdf:p=1",
+        chunk_index=0, char_offset_start=0, char_offset_end=100,
+        text_hash="t1", text_preview="hello",
+        chunker_version="v1", detected_locale="eng",
+        indexed_at=_now_iso(),
+    )
+    first = store.insert_vector_if_absent(
+        chunk_id=chunk_id, run_id=run_id,
+        vector=_make_int8_vector([127, 0, 0, 0]),
+        norm=None, indexed_at=_now_iso(),
+    )
+    second = store.insert_vector_if_absent(
+        chunk_id=chunk_id, run_id=run_id,
+        vector=_make_int8_vector([0, 127, 0, 0]),
+        norm=None, indexed_at=_now_iso(),
+    )
+    assert first is True
+    assert second is False
+    rows = list(store._conn.execute(
+        "SELECT COUNT(*) AS n FROM vectors WHERE chunk_id = ? AND run_id = ?",
+        (chunk_id, run_id),
+    ))
+    assert rows[0]["n"] == 1

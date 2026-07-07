@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from partial_recall.chunk.recursive_char import CHUNKER_VERSION
 from partial_recall.corpus.types import Item, ItemKind, Source
 from partial_recall.embedding.quantize import pack_int8
 from partial_recall.embedding.types import (
@@ -296,3 +297,70 @@ def test_signal_handlers_restored_after_run(store: VectorStore) -> None:
     )
     assert signal.getsignal(signal.SIGINT) == previous_sigint
     assert signal.getsignal(signal.SIGTERM) == previous_sigterm
+
+
+# ---------------------------------------------------------------------------
+# Concurrent-writer race
+# ---------------------------------------------------------------------------
+
+
+class _RacingProvider(_Provider):
+    """Simulates a concurrent index process: while this process waits on
+    the embedding call, the other writer commits vectors for the very
+    chunks queued in this flush. The queue-time vector_exists guard has
+    already passed, so without an idempotent insert the flush dies on
+    the vectors (chunk_id, run_id) UNIQUE constraint."""
+
+    def __init__(self, store: VectorStore, run_id: int) -> None:
+        super().__init__()
+        self._store = store
+        self._run_id = run_id
+
+    def embed(self, texts: list[str], task: str = "search_document",
+              batch_size: int | None = None) -> EmbeddingBatch:
+        import numpy as np
+        batch = super().embed(texts, task=task, batch_size=batch_size)
+        found = self._store.find_chunk_id(
+            item_key="B", corpus="test", source_type="abstract",
+            source_ref=None, chunk_index=0,
+            chunker_version=CHUNKER_VERSION, text_hash="",
+        )
+        if found is not None:
+            chunk_id, _ = found
+            if not self._store.vector_exists(chunk_id, self._run_id):
+                self._store.insert_vector(
+                    chunk_id=chunk_id, run_id=self._run_id,
+                    vector=pack_int8(np.array([1, 2, 3, 4], dtype=np.int8)),
+                    norm=None, indexed_at="2026-01-01T00:00:00+00:00",
+                )
+        return batch
+
+
+def test_extend_survives_concurrent_writer_race(store: VectorStore) -> None:
+    """Two `index --extend` processes on the same run race between
+    the queue-time vector_exists check and the flush. The loser
+    must skip the already-present vector and finish, not crash."""
+    first = run_indexing(
+        adapter=_Adapter([("A", "alpha")]), store=store, provider=_Provider(),
+    )
+    result = run_indexing(
+        adapter=_Adapter([("A", "alpha"), ("B", "bravo")]),
+        store=store,
+        provider=_RacingProvider(store, first.run_id),
+        extend_run_id=first.run_id,
+    )
+    assert result.extended
+    assert not result.interrupted
+    # The raced vector was not double-inserted and not double-counted.
+    assert result.new_vector_count == 0
+    found = store.find_chunk_id(
+        item_key="B", corpus="test", source_type="abstract",
+        source_ref=None, chunk_index=0,
+        chunker_version=CHUNKER_VERSION, text_hash="",
+    )
+    assert found is not None
+    rows = list(store._conn.execute(
+        "SELECT COUNT(*) AS n FROM vectors WHERE chunk_id = ? AND run_id = ?",
+        (found[0], first.run_id),
+    ))
+    assert rows[0]["n"] == 1
