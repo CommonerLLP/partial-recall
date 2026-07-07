@@ -31,6 +31,7 @@ from partial_recall.errors import (
 from partial_recall.extract.pdf_noise import PypdfNoiseFilter
 from partial_recall.index.pipeline import IncompatibleRunError, run_indexing
 from partial_recall.paths import config_path
+from partial_recall.store.index_lock import IndexLock
 from partial_recall.store.vector_store import VectorStore
 
 
@@ -182,6 +183,11 @@ def index_command(
             f"config not found at {cfg_path}; run `partial-recall init` first"
         )
     cfg = load_config(cfg_path)
+
+    # Fail fast before the expensive setup below (ONNX model load, store
+    # open/migration) when another index process is already writing to
+    # this DB. run_indexing holds the real lock for the run itself.
+    IndexLock(cfg.index.vector_db_path).probe()
 
     console.print(f"[bold]Loading corpus adapter:[/bold] {source}")
     adapter: CorpusAdapter = create_adapter(source, cfg)
