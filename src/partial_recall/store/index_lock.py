@@ -36,7 +36,7 @@ class IndexLock:
     """Holds the single-writer lock for one vector DB. Context manager."""
 
     def __init__(self, db_path: Path) -> None:
-        self._lock_path = Path(f"{db_path}{LOCK_SUFFIX}")
+        self._lock_path = Path(f"{Path(db_path).resolve()}{LOCK_SUFFIX}")
         self._conn: sqlite3.Connection | None = None
 
     def acquire(self) -> None:
@@ -49,6 +49,18 @@ class IndexLock:
                 f"index lock is held by another process ({self._lock_path})"
             ) from exc
         self._conn = conn
+
+    def probe(self) -> None:
+        """Fail fast if another process holds the lock; do not keep it.
+
+        For callers with expensive setup ahead of run_indexing (the CLI
+        loads a ~470 MB ONNX model and opens/migrates the store): probe
+        first so the common collision fails before that spend. The run
+        itself is still serialized by run_indexing's own acquire — a
+        writer arriving inside the probe-to-run window is caught there.
+        """
+        self.acquire()
+        self.release()
 
     def release(self) -> None:
         if self._conn is not None:

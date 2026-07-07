@@ -100,6 +100,30 @@ def test_index_accepts_external_dotted_adapter_path(
     assert "Indexed" in result.output
 
 
+def test_index_fails_fast_when_lock_held(
+    tmp_path: Path, fixtures_dir: Path
+) -> None:
+    """With another index process holding the lock, the CLI must fail
+    before the expensive setup (model load, store open) — the probe runs
+    ahead of both."""
+    import sqlite3
+
+    from partial_recall.store.index_lock import LOCK_SUFFIX, IndexLockHeldError
+
+    cfg_path = _write_minimal_config(tmp_path, fixtures_dir)
+    db_path = (tmp_path / "vectors.sqlite").resolve()
+    other = sqlite3.connect(f"{db_path}{LOCK_SUFFIX}", timeout=0)
+    other.execute("BEGIN EXCLUSIVE")
+    try:
+        result = runner.invoke(app, ["index", "--config", str(cfg_path)])
+        assert result.exit_code != 0
+        assert isinstance(result.exception, IndexLockHeldError)
+        # Fail-fast ordering: the probe fired before provider load began.
+        assert "Loading embedding provider" not in (result.output or "")
+    finally:
+        other.close()
+
+
 @pytest.mark.slow
 def test_index_then_status_smoke(
     tmp_path: Path, fixtures_dir: Path
