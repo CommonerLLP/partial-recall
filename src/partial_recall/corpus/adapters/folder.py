@@ -217,7 +217,9 @@ class FolderAdapter:
         """
         counts = {"rewritten": 0, "merged": 0, "skipped": 0}
         for row in store.iter_chunk_refs(corpus=self.name):
-            new_ref = self._legacy_ref_to_stable(row["source_ref"])
+            new_ref = self._legacy_ref_to_stable(
+                row["source_ref"], row["item_corpus_ref"]
+            )
             if new_ref == row["source_ref"]:
                 continue
             if new_ref is None:
@@ -233,10 +235,28 @@ class FolderAdapter:
             log.info("folder.adapter.source_refs_migrated", **counts)
         return counts
 
-    def _legacy_ref_to_stable(self, source_ref: str) -> str | None:
-        """Map a legacy source_ref to the stable format; None if unmappable."""
+    def _legacy_ref_to_stable(
+        self, source_ref: str, item_corpus_ref: str | None
+    ) -> str | None:
+        """Map a legacy source_ref to the stable format; None if unmappable.
+
+        The item's corpus_ref (the file's absolute path, the same value
+        item_key is hashed from) is the authority for which root owns the
+        chunk: a positional ref like "0:x.md" cannot be trusted against
+        the CURRENT root order, because the roots may have been reordered
+        since the row was written — that reordering is this bug.
+        """
         if any(source_ref.startswith(f"{rid}:") for rid in self._roots_by_id):
             return source_ref  # already stable
+        if item_corpus_ref:
+            item_path = Path(item_corpus_ref)
+            if item_path.is_absolute():
+                for root in self.roots:
+                    try:
+                        rel = item_path.relative_to(root).as_posix()
+                    except ValueError:
+                        continue
+                    return f"{_root_id(root)}:{rel}"
         p = Path(source_ref)
         if p.is_absolute():
             for root in self.roots:
@@ -249,7 +269,11 @@ class FolderAdapter:
         if ":" in source_ref:
             prefix, _, rel = source_ref.partition(":")
             if prefix.isdigit() and int(prefix) < len(self.roots):
-                return f"{_root_id(self.roots[int(prefix)])}:{rel}"
+                # No corpus_ref to consult: positional mapping through the
+                # current order is only safe if the file is really there.
+                root = self.roots[int(prefix)]
+                if (root / rel).exists():
+                    return f"{_root_id(root)}:{rel}"
         return None
 
     def get_text(self, item: Item, source: Source) -> str | None:

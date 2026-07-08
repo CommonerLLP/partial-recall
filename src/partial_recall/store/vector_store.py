@@ -510,13 +510,23 @@ class VectorStore:
         return None if row is None else (int(row["chunk_id"]), str(row["text_hash"]))
 
     def iter_chunk_refs(self, *, corpus: str) -> list[dict[str, Any]]:
-        """All chunk identity rows for one corpus, for source_ref migration."""
+        """All chunk identity rows for one corpus, for source_ref migration.
+
+        Includes the owning item's corpus_ref: for path-backed corpora it
+        holds the file's absolute path — the order-independent authority
+        for which root owns a legacy positional ref.
+        """
         rows = self._conn.execute(
             """
-            SELECT chunk_id, item_key, source_type, source_ref,
-                   chunk_index, chunker_version
-            FROM chunks
-            WHERE owner = 'local' AND corpus = ?
+            SELECT c.chunk_id, c.item_key, c.source_type, c.source_ref,
+                   c.chunk_index, c.chunker_version,
+                   i.corpus_ref AS item_corpus_ref
+            FROM chunks c
+            LEFT JOIN items i
+                ON i.owner = c.owner
+               AND i.corpus = c.corpus
+               AND i.item_key = c.item_key
+            WHERE c.owner = 'local' AND c.corpus = ?
             """,
             (corpus,),
         ).fetchall()

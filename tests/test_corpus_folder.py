@@ -445,3 +445,48 @@ def test_reordered_roots_do_not_reembed(tmp_path: Path) -> None:
         first_adapter.close()
         second_adapter.close()
         store.close()
+
+
+def test_migration_respects_original_root_after_reorder(tmp_path: Path) -> None:
+    """Codex review scenario: the DB was written with roots [A, B], the
+    user reorders config to [B, A], THEN upgrades. A legacy "0:alpha.md"
+    still belongs to A; mapping it through the current order would
+    assign it B's stable id. The item's corpus_ref (A's absolute path)
+    must win — even when B contains a same-named decoy file."""
+    from datetime import UTC, datetime
+
+    from partial_recall.store.vector_store import VectorStore
+
+    a, b = _two_roots(tmp_path / "corpus")
+    (b / "alpha.md").write_text("decoy in B", encoding="utf-8")
+    reordered = FolderAdapter(roots=[b, a])  # B is now index 0
+    store = VectorStore(tmp_path / "vectors.sqlite")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    try:
+        alpha_path = (a / "alpha.md").resolve()
+        alpha_key = _stable_item_key(alpha_path)
+        store.upsert_item(
+            item_key=alpha_key, corpus="folder", item_type="file",
+            title="alpha", date=None, creators_json="[]", abstract=None,
+            metadata_hash="h", last_indexed_at=now,
+            corpus_ref=str(alpha_path),
+        )
+        store.insert_chunk(
+            item_key=alpha_key, corpus="folder", source_type="file",
+            source_ref="0:alpha.md", chunk_index=0,
+            char_offset_start=0, char_offset_end=10, text_hash="t",
+            text_preview="alpha text", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+
+        counts = reordered.migrate_source_refs(store)
+
+        assert counts == {"rewritten": 1, "merged": 0, "skipped": 0}
+        (migrated,) = store.iter_chunk_refs(corpus="folder")
+        assert migrated["source_ref"] == _refs(reordered)["alpha"]
+        # And the walk agrees: get_sources for A's alpha emits this exact ref.
+        item = next(i for i in reordered.list_items() if i.corpus_ref == str(alpha_path))
+        assert next(reordered.get_sources(item)).source_ref == migrated["source_ref"]
+    finally:
+        reordered.close()
+        store.close()
