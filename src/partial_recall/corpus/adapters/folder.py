@@ -27,8 +27,12 @@ import hashlib
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import structlog
+
+if TYPE_CHECKING:
+    from partial_recall.store.vector_store import VectorStore
 
 from partial_recall.corpus.adapters._shared import matches_any, read_ignorefile, stable_item_key
 from partial_recall.corpus.types import Item, ItemKind, Source
@@ -49,6 +53,17 @@ _KNOWN_EXTENSIONS = _TEXT_EXTENSIONS | _PDF_EXTENSIONS | _EPUB_EXTENSIONS | _DOC
 
 class FolderAdapterError(PartialRecallError):
     """FolderAdapter-specific failure."""
+
+
+def _root_id(root: Path) -> str:
+    """Stable identifier for a configured root: survives reordering.
+
+    'r' + first 10 hex of SHA-256 of the resolved path. The 'r' marker
+    cannot collide with the legacy numeric root-index prefix or with an
+    absolute path, so every source_ref format stays distinguishable.
+    """
+    digest = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()
+    return f"r{digest[:10]}"
 
 
 
@@ -78,6 +93,13 @@ class FolderAdapter:
             if not r.is_dir():
                 raise CorpusUnavailableError(f"folder root is not a directory: {r}")
         self.recursive = recursive
+        # Stable per-root identifier: source_ref must not depend on the
+        # ORDER of `roots` in config — reordering used to orphan every
+        # chunk and re-embed the corpus. The "r" marker keeps the id
+        # distinguishable from the legacy numeric root-index prefix.
+        self._roots_by_id: dict[str, Path] = {
+            _root_id(r): r for r in self.roots
+        }
         # Default to text-only + pdf so v0.2.0 doesn't promise extractors
         # it doesn't have. EPUB/DOCX configured by the user still resolve
         # to "skip" until their extractors ship.
@@ -127,18 +149,17 @@ class FolderAdapter:
         if not item.corpus_ref:
             return
         abs_path = Path(item.corpus_ref)
-        # Emit "{root_idx}:{rel_posix}" so source_ref is portable and
-        # unambiguous even with multiple roots that share filenames.
-        # The root_idx prefix encodes which configured root owns this file,
-        # avoiding the wrong-root ambiguity flagged in issue #23.
-        # Fall back to the absolute path only for files that fall outside
-        # every configured root (edge case; shouldn't happen in normal use).
-        for idx, root in enumerate(self.roots):
+        # Emit "{root_id}:{rel_posix}" so source_ref is portable,
+        # unambiguous with multiple roots that share filenames (issue
+        # #23), and stable when config roots are reordered. Fall back to
+        # the absolute path only for files that fall outside every
+        # configured root (edge case; shouldn't happen in normal use).
+        for root in self.roots:
             try:
                 rel = abs_path.relative_to(root).as_posix()
                 yield Source(
                     source_type="file",
-                    source_ref=f"{idx}:{rel}",
+                    source_ref=f"{_root_id(root)}:{rel}",
                     kind=ItemKind.TEXT,
                 )
                 return
@@ -153,20 +174,24 @@ class FolderAdapter:
     def _resolve_source_ref(self, source_ref: str) -> Path | None:
         """Return an absolute Path for source_ref.
 
-        Accepts three formats:
-        - "{root_idx}:{rel_posix}"  — new portable format (issue #23)
-        - absolute path             — legacy rows indexed before this fix
+        Accepts every format ever written to a store:
+        - "{root_id}:{rel_posix}"   — current stable format
+        - "{root_idx}:{rel_posix}"  — legacy positional format (pre-stable-ids)
+        - absolute path             — legacy rows indexed before issue #23
         - bare relative path        — intermediate format (should not occur
                                       in production, but handled defensively)
         """
         p = Path(source_ref)
         if p.is_absolute():
             return p if p.exists() else None
-        # Try new "{idx}:{rel}" format.
         if ":" in source_ref:
-            idx_str, _, rel = source_ref.partition(":")
-            if idx_str.isdigit():
-                idx = int(idx_str)
+            prefix, _, rel = source_ref.partition(":")
+            root = self._roots_by_id.get(prefix)
+            if root is not None:
+                candidate = root / rel
+                return candidate if candidate.exists() else None
+            if prefix.isdigit():
+                idx = int(prefix)
                 if idx < len(self.roots):
                     candidate = self.roots[idx] / rel
                     return candidate if candidate.exists() else None
@@ -175,6 +200,56 @@ class FolderAdapter:
             candidate = root / source_ref
             if candidate.exists():
                 return candidate
+        return None
+
+    def migrate_source_refs(self, store: VectorStore) -> dict[str, int]:
+        """Rewrite legacy source_refs to the stable root-id format.
+
+        Optional adapter hook, called by run_indexing before walking.
+        Handles both legacy formats: positional "{idx}:{rel}" (mapped
+        through the CURRENT root order — the same mapping the old lookup
+        used) and absolute paths that fall under a configured root.
+        Rows whose rewrite target already exists are merged by the store
+        (past drift created those duplicates); their vectors survive on
+        the merged row. Idempotent: current-format refs are untouched,
+        and unmappable refs (absolute paths outside every configured
+        root) are left alone and counted as skipped.
+        """
+        counts = {"rewritten": 0, "merged": 0, "skipped": 0}
+        for row in store.iter_chunk_refs(corpus=self.name):
+            new_ref = self._legacy_ref_to_stable(row["source_ref"])
+            if new_ref == row["source_ref"]:
+                continue
+            if new_ref is None:
+                counts["skipped"] += 1
+                continue
+            outcome = store.rewrite_chunk_source_ref(
+                chunk_id=row["chunk_id"],
+                corpus=self.name,
+                new_source_ref=new_ref,
+            )
+            counts[outcome] += 1
+        if counts["rewritten"] or counts["merged"] or counts["skipped"]:
+            log.info("folder.adapter.source_refs_migrated", **counts)
+        return counts
+
+    def _legacy_ref_to_stable(self, source_ref: str) -> str | None:
+        """Map a legacy source_ref to the stable format; None if unmappable."""
+        if any(source_ref.startswith(f"{rid}:") for rid in self._roots_by_id):
+            return source_ref  # already stable
+        p = Path(source_ref)
+        if p.is_absolute():
+            for root in self.roots:
+                try:
+                    rel = p.relative_to(root).as_posix()
+                except ValueError:
+                    continue
+                return f"{_root_id(root)}:{rel}"
+            return None  # outside every configured root — leave untouched
+        if ":" in source_ref:
+            prefix, _, rel = source_ref.partition(":")
+            if prefix.isdigit() and int(prefix) < len(self.roots):
+                return f"{_root_id(self.roots[int(prefix)])}:{rel}"
         return None
 
     def get_text(self, item: Item, source: Source) -> str | None:
