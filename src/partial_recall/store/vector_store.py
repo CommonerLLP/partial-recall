@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from partial_recall.errors import VectorStoreError
 from partial_recall.store.connection import connect
 
 
@@ -507,6 +508,87 @@ class VectorStore:
             ),
         ).fetchone()
         return None if row is None else (int(row["chunk_id"]), str(row["text_hash"]))
+
+    def iter_chunk_refs(self, *, corpus: str) -> list[dict[str, Any]]:
+        """All chunk identity rows for one corpus, for source_ref migration.
+
+        Includes the owning item's corpus_ref: for path-backed corpora it
+        holds the file's absolute path — the order-independent authority
+        for which root owns a legacy positional ref.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT c.chunk_id, c.item_key, c.source_type, c.source_ref,
+                   c.chunk_index, c.chunker_version,
+                   i.corpus_ref AS item_corpus_ref
+            FROM chunks c
+            LEFT JOIN items i
+                ON i.owner = c.owner
+               AND i.corpus = c.corpus
+               AND i.item_key = c.item_key
+            WHERE c.owner = 'local' AND c.corpus = ?
+            """,
+            (corpus,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def rewrite_chunk_source_ref(
+        self, *, chunk_id: int, corpus: str, new_source_ref: str
+    ) -> str:
+        """Rewrite one chunk's source_ref to its stable replacement.
+
+        When a row with the target identity already exists (a duplicate
+        created by past source_ref drift), the rows are merged instead:
+        the legacy row's vectors move to the survivor wherever the
+        (chunk_id, run_id) slot is free, and the legacy row is deleted
+        (cascade drops any vector whose run slot the survivor already
+        fills). Returns 'rewritten' or 'merged'.
+        """
+        row = self._conn.execute(
+            """
+            SELECT item_key, source_type, chunk_index, chunker_version
+            FROM chunks WHERE chunk_id = ?
+            """,
+            (chunk_id,),
+        ).fetchone()
+        if row is None:
+            raise VectorStoreError(f"chunk_id {chunk_id} not found")
+        twin = self._conn.execute(
+            """
+            SELECT chunk_id FROM chunks
+            WHERE owner = 'local'
+              AND corpus = ?
+              AND item_key = ?
+              AND source_type = ?
+              AND source_ref = ?
+              AND chunk_index = ?
+              AND chunker_version = ?
+              AND chunk_id != ?
+            """,
+            (
+                corpus, row["item_key"], row["source_type"], new_source_ref,
+                row["chunk_index"], row["chunker_version"], chunk_id,
+            ),
+        ).fetchone()
+        if twin is None:
+            self._conn.execute(
+                "UPDATE chunks SET source_ref = ? WHERE chunk_id = ?",
+                (new_source_ref, chunk_id),
+            )
+            return "rewritten"
+        twin_id = int(twin["chunk_id"])
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            self._conn.execute(
+                "UPDATE OR IGNORE vectors SET chunk_id = ? WHERE chunk_id = ?",
+                (twin_id, chunk_id),
+            )
+            self._conn.execute("DELETE FROM chunks WHERE chunk_id = ?", (chunk_id,))
+            self._conn.execute("COMMIT")
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        return "merged"
 
     def update_chunk_content(
         self,

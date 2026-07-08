@@ -251,3 +251,242 @@ def test_get_text_works_with_absolute_legacy_source_ref(
     text = adapter.get_text(item, legacy_source)
     assert text is not None
     assert "caste" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Stable root ids + source_ref migration
+# ---------------------------------------------------------------------------
+
+
+def _two_roots(tmp_path: Path) -> tuple[Path, Path]:
+    a = tmp_path / "root_a"
+    b = tmp_path / "root_b"
+    for root in (a, b):
+        root.mkdir(parents=True)
+    (a / "alpha.md").write_text("alpha text", encoding="utf-8")
+    (b / "bravo.md").write_text("bravo text", encoding="utf-8")
+    return a, b
+
+
+def _refs(adapter: FolderAdapter) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in adapter.list_items():
+        for source in adapter.get_sources(item):
+            out[item.title] = source.source_ref
+    return out
+
+
+def test_source_refs_survive_root_reordering(tmp_path: Path) -> None:
+    """THE bug: source_ref used to embed the root's position in config,
+    so reordering roots orphaned every chunk and re-embedded the corpus."""
+    a, b = _two_roots(tmp_path)
+    first = FolderAdapter(roots=[a, b])
+    second = FolderAdapter(roots=[b, a])
+    try:
+        assert _refs(first) == _refs(second)
+    finally:
+        first.close()
+        second.close()
+
+
+def test_resolves_every_source_ref_format(tmp_path: Path) -> None:
+    a, b = _two_roots(tmp_path)
+    adapter = FolderAdapter(roots=[a, b])
+    try:
+        stable = _refs(adapter)["alpha"]
+        expected = (a / "alpha.md").resolve()
+        assert adapter._resolve_source_ref(stable) == expected
+        # Legacy positional format still resolves through root order.
+        assert adapter._resolve_source_ref("0:alpha.md") == expected
+        # Legacy absolute path.
+        assert adapter._resolve_source_ref(str(expected)) == expected
+        # Bare relative fallback.
+        assert adapter._resolve_source_ref("alpha.md") == expected
+    finally:
+        adapter.close()
+
+
+def test_migrate_source_refs_rewrites_and_merges(tmp_path: Path) -> None:
+    """Legacy rows (positional prefix + absolute path) are rewritten in
+    place; a legacy row whose target identity already exists is merged
+    with its vectors preserved on the survivor."""
+    from datetime import UTC, datetime
+
+    from partial_recall.store.vector_store import VectorStore
+
+    a, b = _two_roots(tmp_path / "corpus")
+    adapter = FolderAdapter(roots=[a, b])
+    store = VectorStore(tmp_path / "vectors.sqlite")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    run_id = store.create_run(
+        provider="fake", model_name="fake", model_version="v1",
+        dimensions=4, quantization="int8", normalized=True,
+        distance_metric="cosine", chunker_name="c", chunker_version="v1",
+        started_at=now,
+    )
+    try:
+        alpha_key = _stable_item_key(a / "alpha.md")
+        bravo_key = _stable_item_key(b / "bravo.md")
+        for key in (alpha_key, bravo_key):
+            store.upsert_item(
+                item_key=key, corpus="folder", item_type="file", title=key,
+                date=None, creators_json="[]", abstract=None,
+                metadata_hash=f"h-{key}", last_indexed_at=now, corpus_ref=None,
+            )
+        # Legacy positional row (no stable twin) — should be rewritten.
+        store.insert_chunk(
+            item_key=alpha_key, corpus="folder", source_type="file",
+            source_ref="0:alpha.md", chunk_index=0,
+            char_offset_start=0, char_offset_end=10, text_hash="t1",
+            text_preview="alpha text", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+        # Drift pair: a stable-format row (with the active vector) AND a
+        # legacy absolute-path row (with an older run's vector) for the
+        # same chunk — should merge, keeping both vectors.
+        stable_ref = _refs(adapter)["bravo"]
+        stable_row = store.insert_chunk(
+            item_key=bravo_key, corpus="folder", source_type="file",
+            source_ref=stable_ref, chunk_index=0,
+            char_offset_start=0, char_offset_end=10, text_hash="t2",
+            text_preview="bravo text", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+        legacy_abs = store.insert_chunk(
+            item_key=bravo_key, corpus="folder", source_type="file",
+            source_ref=str((b / "bravo.md").resolve()), chunk_index=0,
+            char_offset_start=0, char_offset_end=10, text_hash="t2",
+            text_preview="bravo text", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+        old_run = store.create_run(
+            provider="fake", model_name="fake", model_version="v1",
+            dimensions=4, quantization="int8", normalized=True,
+            distance_metric="cosine", chunker_name="c", chunker_version="v1",
+            started_at=now,
+        )
+        store.insert_vector(
+            chunk_id=stable_row, run_id=run_id,
+            vector=b"\x7f\x00\x00\x00", norm=None, indexed_at=now,
+        )
+        store.insert_vector(
+            chunk_id=legacy_abs, run_id=old_run,
+            vector=b"\x00\x7f\x00\x00", norm=None, indexed_at=now,
+        )
+        # Unmappable row: absolute path outside every root — left alone.
+        outside = tmp_path / "outside.md"
+        outside.write_text("outside", encoding="utf-8")
+        outside_key = _stable_item_key(outside)
+        store.upsert_item(
+            item_key=outside_key, corpus="folder", item_type="file",
+            title="outside", date=None, creators_json="[]", abstract=None,
+            metadata_hash="h-out", last_indexed_at=now, corpus_ref=None,
+        )
+        store.insert_chunk(
+            item_key=outside_key, corpus="folder", source_type="file",
+            source_ref=str(outside.resolve()), chunk_index=0,
+            char_offset_start=0, char_offset_end=7, text_hash="t3",
+            text_preview="outside", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+
+        counts = adapter.migrate_source_refs(store)
+
+        assert counts == {"rewritten": 1, "merged": 1, "skipped": 1}
+        refs = {
+            r["source_ref"]
+            for r in store.iter_chunk_refs(corpus="folder")
+        }
+        assert _refs(adapter)["alpha"] in refs          # positional → stable
+        assert "0:alpha.md" not in refs
+        assert str((b / "bravo.md").resolve()) not in refs   # merged away
+        assert str(outside.resolve()) in refs           # skipped, untouched
+        # Both vectors survive on the surviving bravo row.
+        rows = store._conn.execute(
+            "SELECT run_id FROM vectors WHERE chunk_id = ? ORDER BY run_id",
+            (stable_row,),
+        ).fetchall()
+        assert [r["run_id"] for r in rows] == [run_id, old_run]
+        # Idempotent: second run is a no-op.
+        assert adapter.migrate_source_refs(store) == {
+            "rewritten": 0, "merged": 0, "skipped": 1,
+        }
+    finally:
+        adapter.close()
+        store.close()
+
+
+def test_reordered_roots_do_not_reembed(tmp_path: Path) -> None:
+    """End-to-end regression for the root-order footgun: index with roots
+    [A, B], reorder to [B, A], extend — nothing may be re-created or
+    re-embedded."""
+    from partial_recall.index.pipeline import run_indexing
+    from partial_recall.store.vector_store import VectorStore
+    from tests.test_pipeline import FakeEmbeddingProvider
+
+    a, b = _two_roots(tmp_path / "corpus")
+    store = VectorStore(tmp_path / "vectors.sqlite")
+    first_adapter = FolderAdapter(roots=[a, b])
+    second_adapter = FolderAdapter(roots=[b, a])
+    try:
+        first = run_indexing(
+            adapter=first_adapter, store=store, provider=FakeEmbeddingProvider(),
+        )
+        assert first.chunk_count == 2
+        result = run_indexing(
+            adapter=second_adapter, store=store,
+            provider=FakeEmbeddingProvider(),
+            extend_run_id=first.run_id,
+        )
+        assert result.chunk_count == 0
+        assert result.new_vector_count == 0
+        assert result.skipped_chunk_count == 2
+    finally:
+        first_adapter.close()
+        second_adapter.close()
+        store.close()
+
+
+def test_migration_respects_original_root_after_reorder(tmp_path: Path) -> None:
+    """Codex review scenario: the DB was written with roots [A, B], the
+    user reorders config to [B, A], THEN upgrades. A legacy "0:alpha.md"
+    still belongs to A; mapping it through the current order would
+    assign it B's stable id. The item's corpus_ref (A's absolute path)
+    must win — even when B contains a same-named decoy file."""
+    from datetime import UTC, datetime
+
+    from partial_recall.store.vector_store import VectorStore
+
+    a, b = _two_roots(tmp_path / "corpus")
+    (b / "alpha.md").write_text("decoy in B", encoding="utf-8")
+    reordered = FolderAdapter(roots=[b, a])  # B is now index 0
+    store = VectorStore(tmp_path / "vectors.sqlite")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    try:
+        alpha_path = (a / "alpha.md").resolve()
+        alpha_key = _stable_item_key(alpha_path)
+        store.upsert_item(
+            item_key=alpha_key, corpus="folder", item_type="file",
+            title="alpha", date=None, creators_json="[]", abstract=None,
+            metadata_hash="h", last_indexed_at=now,
+            corpus_ref=str(alpha_path),
+        )
+        store.insert_chunk(
+            item_key=alpha_key, corpus="folder", source_type="file",
+            source_ref="0:alpha.md", chunk_index=0,
+            char_offset_start=0, char_offset_end=10, text_hash="t",
+            text_preview="alpha text", chunker_version="v1", indexed_at=now,
+            detected_locale=None,
+        )
+
+        counts = reordered.migrate_source_refs(store)
+
+        assert counts == {"rewritten": 1, "merged": 0, "skipped": 0}
+        (migrated,) = store.iter_chunk_refs(corpus="folder")
+        assert migrated["source_ref"] == _refs(reordered)["alpha"]
+        # And the walk agrees: get_sources for A's alpha emits this exact ref.
+        item = next(i for i in reordered.list_items() if i.corpus_ref == str(alpha_path))
+        assert next(reordered.get_sources(item)).source_ref == migrated["source_ref"]
+    finally:
+        reordered.close()
+        store.close()

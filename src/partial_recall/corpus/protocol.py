@@ -15,6 +15,12 @@ class CorpusAdapter(Protocol):
 
     v0.0.1: ZoteroAdapter only.
     v0.1.0: + FolderAdapter.
+
+    Optional hook (NOT part of this protocol, discovered by duck-typing
+    so existing adapters keep validating): `migrate_source_refs(store)`.
+    If present, run_indexing calls it before walking items; adapters use
+    it to rewrite legacy source_ref formats in place so old rows keep
+    matching instead of being re-created and re-embedded.
     """
 
     @property

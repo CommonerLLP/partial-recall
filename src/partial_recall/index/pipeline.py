@@ -209,6 +209,14 @@ def _run_indexing(
         )
         log.info("indexing.run.start", run_id=run_id, provider=meta.provider, model=meta.model_name)
 
+    # Optional adapter hook: heal legacy source_ref formats before the
+    # walk, so find_chunk_id matches existing rows instead of re-creating
+    # (and re-embedding) them. Duck-typed rather than part of the
+    # CorpusAdapter protocol — existing external adapters must not break.
+    migrate_refs = getattr(adapter, "migrate_source_refs", None)
+    if callable(migrate_refs):
+        migrate_refs(store)
+
     item_count = 0
     chunk_count = 0
     new_vector_count = 0
