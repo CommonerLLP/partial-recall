@@ -4,7 +4,16 @@
 > CommonerLLP repo that touches corpora, search, crawling, or MCP
 > serving. Not optional. Read before scoping any new feature.
 >
-> **Last updated: 2026-06-24**
+> **Last updated: 2026-08-08** (repo names only)
+>
+> **Naming note (2026-08-08):** repo names in this doc were updated for two
+> renames that happened after it was written — `budget-crawler` →
+> `public-finance` (2026-06-20) and `sansad-semantic-crawler` →
+> `commoner-analyse` (2026-07-06, v2.1.0). The layer diagrams otherwise
+> predate the extraction of acquisition into `commoner-probe`: where this doc
+> describes the analysis repo as owning the crawl library, that role now
+> belongs to `commoner-probe`. For current org topology, `_org/architecture.md`
+> is canonical.
 
 ---
 
@@ -92,8 +101,8 @@ You write ~200 lines. You get a production search stack.
 | `CalibreAdapter` | Calibre library | In progress | `partial-recall` |
 | `MarkdownNotesAdapter` | Markdown note directories | In progress | `partial-recall` |
 | `CADAdapter` | Constituent Assembly Debates | **Planned** | `cad-mcp` |
-| `SansadAdapter` | Lok Sabha Q&A | **Planned** | `sansad-semantic-crawler` |
-| `BudgetAdapter` | OBI / state budget documents | **Planned** | `budget-crawler` |
+| `SansadAdapter` | Lok Sabha Q&A | **Planned** | `commoner-analyse` |
+| `BudgetAdapter` | OBI / state budget documents | **Planned** | `public-finance` |
 
 ---
 
@@ -148,13 +157,13 @@ as Item metadata.
 ## The org topology
 
 ```
-Layer 0  sansad-semantic-crawler   shared crawl library, parliament sources
+Layer 0  commoner-analyse   shared crawl library, parliament sources
          ↓ pip install (pinned)
 Layer 1  partial-recall            engine: chunk, embed, index, search, serve
          ↓ CorpusAdapter instances
 Layer 2  cad-mcp                   CAD corpus + session/context tools
          sansad (as corpus)        parliament Q&A corpus
-         budget-crawler            OBI/budget corpus + forensic tools
+         public-finance            OBI/budget corpus + forensic tools
          ↓ search results
 Layer 3  theright2read             public dashboard
          academiaindia             public dashboard
@@ -166,7 +175,7 @@ Full topology with capability registry: `_org/architecture.md`.
 
 ## History (for orientation, not re-litigation)
 
-`sansad-semantic-crawler` was built first and discovered the need for
+`commoner-analyse` was built first and discovered the need for
 corpus search through practice. `partial-recall` was extracted from that
 experience as the correct shared solution — a deliberate DRY move.
 
@@ -198,13 +207,13 @@ Repeating that extraction in every new domain repo is the wrong move.
 ║  ├── SPEAKER_RE.finditer(text)  → (speaker, body) pairs             ║
 ║  └── sqlite3.connect(cad.db)   → sessions + speeches tables         ║
 ║                                                                      ║
-║  sansad-semantic-crawler                                             ║
+║  commoner-analyse                                             ║
 ║  ├── http_client.StdlibSession  urllib, no cache                     ║
 ║  ├── crawl()                    GET sansad.in/…                      ║
 ║  ├── parse_qa()                 → Question, Answer objects           ║
 ║  └── classify(topic_profile)    regex|embedding|llm|ensemble        ║
 ║                                                                      ║
-║  budget-crawler/budget_crawler/                                      ║
+║  public-finance/publicfinance/                                      ║
 ║  ├── scrapping_utils.ScrappingUtils   requests + HTTPAdapter retry   ║
 ║  ├── obi_utils.OBIUtils               (duplicate of above — debt)    ║
 ║  ├── rbi_fetcher.fetch()              GET RBI state finance PDFs     ║
@@ -285,12 +294,12 @@ Repeating that extraction in every new domain repo is the wrong move.
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
 ║  theright2read                                                       ║
-║  └── sansad-semantic-crawler (pip, pinned v0.2.0)                   ║
+║  └── commoner-analyse (pip, pinned v0.2.0)                   ║
 ║      → corpus-refresh → assets/parliament_libraries.js               ║
 ║      → static GH Pages site                                          ║
 ║                                                                      ║
 ║  academiaindia                                                        ║
-║  └── sansad-semantic-crawler (pip, pinned v0.2.0)                   ║
+║  └── commoner-analyse (pip, pinned v0.2.0)                   ║
 ║      → make scrape → docs/data/*.json                                ║
 ║      → static GH Pages site + Vitest frontend tests                 ║
 ║                                                                      ║
@@ -298,7 +307,7 @@ Repeating that extraction in every new domain repo is the wrong move.
 
 DEBT ITEMS (annotated inline above with ← DEBT):
   1. cad-mcp search tools duplicate partial-recall  [HIGH]
-  2. budget-crawler scrapping_utils ≈ obi_utils     [MEDIUM]
-  3. budget-crawler/zotero_semantic_search.py       [fossil — delete]
-  4. budget-crawler/sansad_vacancy_scraper.py       [delete, import sansad]
+  2. public-finance scrapping_utils ≈ obi_utils     [MEDIUM]
+  3. public-finance/zotero_semantic_search.py       [fossil — delete]
+  4. public-finance/sansad_vacancy_scraper.py       [delete, import sansad]
 ```
