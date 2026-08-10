@@ -234,7 +234,7 @@ Repeating that extraction in every new domain repo is the wrong move.
 ║  ├── ZoteroAdapter.list_items()   reads ~/Zotero/zotero.sqlite (RO) ║
 ║  ├── FolderAdapter.list_items()   walks directory, reads files       ║
 ║  ├── [CADAdapter]                 PLANNED — lives in cad-mcp         ║
-║  └── [SansadAdapter]              PLANNED — lives in sansad-crawler  ║
+║  └── [SansadAdapter]              PLANNED — lives in commoner-analyse║
 ║                                                                      ║
 ║  extract/pdf.py                                                      ║
 ║  └── extract_pdf_text(path)       pypdf + pdfplumber                 ║
