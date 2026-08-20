@@ -156,6 +156,16 @@ def index_command(
         "--extend-run",
         help="Extend a specific run_id (overrides --extend / active run).",
     ),
+    rescan: bool = typer.Option(  # noqa: B008
+        False,
+        "--rescan",
+        help=(
+            "When extending: extract every source again, even one whose "
+            "chunks all have a vector already. Use it after editing a file "
+            "in place. Extend mode otherwise skips those sources, because "
+            "re-extracting them cannot produce new work."
+        ),
+    ),
     allow_provider_mismatch: bool = typer.Option(  # noqa: B008
         False,
         "--allow-provider-mismatch",
@@ -324,6 +334,7 @@ def index_command(
                     provider=provider,
                     extend_run_id=target_run_id,
                     allow_provider_mismatch=allow_provider_mismatch,
+                    rescan=rescan,
                     on_item_start=_on_item_start,
                 )
             except IncompatibleRunError as e:
@@ -345,6 +356,8 @@ def index_command(
                 f"added [bold]{result.chunk_count}[/bold] new chunks, "
                 f"embedded [bold]{result.new_vector_count}[/bold] new vectors, "
                 f"skipped [bold]{result.skipped_chunk_count}[/bold] already-vectorised"
+                f" chunks, skipped extraction on "
+                f"[bold]{result.skipped_source_count}[/bold] covered sources"
             )
         else:
             console.print(

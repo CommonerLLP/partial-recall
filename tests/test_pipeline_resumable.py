@@ -282,7 +282,9 @@ def test_resume_chunk_dedup_still_catches_items_below_progress(
     # Only C is new; A and B are skipped by vector_exists even with
     # no progress hint.
     assert embedded_texts == ["charlie"]
-    assert second.skipped_chunk_count == 2  # A + B chunks already vectorised
+    # A and B are covered, so #48 skips their extraction. The invariant the
+    # test guards is the line above: no progress hint, still no re-embedding.
+    assert second.skipped_source_count == 2
 
 
 def test_signal_handlers_restored_after_run(store: VectorStore) -> None:
