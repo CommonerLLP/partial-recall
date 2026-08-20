@@ -65,14 +65,14 @@ Current scope is verification, not claims expansion:
 - Record failure modes before changing model defaults.
 - Keep public claims tied to verified results.
 
-### 3. Prepare v0.4 OCR / HTR as a Pluggable Backend
+### 3. Prepare v0.5 OCR / HTR as a Pluggable Backend
 
 OCR and handwriting/text-recognition belong in `partial-recall` only as a
 generic, optional extraction backend. The engine may expose a protocol and
 provenance model. It should not hardwire one heavy vision stack into the core
 install.
 
-The v0.4 planning target is:
+The v0.5 planning target is:
 
 - Tropy-compatible local manuscript image adapter.
 - Optional OCR for printed text.

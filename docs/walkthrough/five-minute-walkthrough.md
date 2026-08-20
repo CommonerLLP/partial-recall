@@ -37,7 +37,7 @@ Check:
 
 ```zsh
 partial-recall --version
-# → partial-recall 0.3.2
+# → partial-recall 0.4.0
 ```
 
 If you get `command not found: partial-recall`, see
