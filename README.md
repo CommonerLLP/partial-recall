@@ -90,7 +90,7 @@ partial-recall --install-completion
 | `BGE-M3` | `sentence-transformer` | ~3.5 GB | 100+ | Highest local quality. See note below. |
 | `gemini-embedding-001` | `gemini` | — | Multilingual | Cloud API. Data leaves your machine. |
 
-**Note on multilingual coverage:** LaBSE and BGE-M3 are designed for Tamil, Hindi, Bengali, Urdu, Persian, and Arabic per their respective model documentation. Retrieval quality across these scripts has not yet been independently verified by partial-recall. Independent verification is planned for v0.4.0.
+**Note on multilingual coverage:** LaBSE and BGE-M3 are designed for Tamil, Hindi, Bengali, Urdu, Persian, and Arabic per their respective model documentation. Retrieval quality across these scripts has not yet been independently verified by partial-recall. Independent verification is planned for v0.5.0.
 
 GPU/Metal acceleration is used automatically when available (NVIDIA CUDA, Apple Silicon MPS). CPU is the baseline — the tool never requires a GPU.
 
@@ -212,7 +212,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Roadmap and status
 
-**Current release: v0.3.2.**
+**Current release: v0.4.0.**
 
 See [SCOPE.md](./SCOPE.md) for the current project boundary.
 See [ROADMAP.md](./ROADMAP.md) for the full plan.

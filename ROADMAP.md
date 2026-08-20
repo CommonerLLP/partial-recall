@@ -197,7 +197,7 @@ changes. No version bump (still v0.2.4 on main).
 - [x] `CalibreAdapter` (Calibre e-book library via `metadata.db`; no Calibre install required; EPUB + PDF + TXT)
 - [x] EPUB extractor (stdlib zip + html.parser; no ebooklib dep)
 - [x] DOCX extractor (stdlib zip + xml.etree; no python-docx dep; for humanities scholars using Word)
-- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.4.0).
+- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.5.0).
 - [x] Hardware-aware, language-aware init wizard — detects RAM + chip, surveys corpus languages, shows ranked model ladder with provenance (maintainer, HQ country, open-weights, license, documented military contracts, data sovereignty)
 - [x] Pre-release liability disclaimer in init wizard and README
 - [x] `[embedding] device = "auto"` config field (CUDA → MPS → CPU auto-detection)
@@ -205,14 +205,30 @@ changes. No version bump (still v0.2.4 on main).
 - [x] Fix: Zotero collection sync used closed adapter connection
 - [x] `partial-recall doctor --fix` (iCloud UF_HIDDEN fix for .pth files)
 
-**Deferred to v0.4.0 or later:**
+**Deferred to v0.5.0 or later:**
 - [/] Locale-aware embedding routing (Tamil chunks → Tamil-strong embedder; Persian → Persian-strong)
 - [/] i18n: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese interface strings
 - [/] Better chunking: semantic-aware via `blingfire` or `spaCy`; tokenizer-aware for CJK
 - [/] Snapshot / web indexing (Zotero webpage captures)
 - [/] Optional Zotero plugin (triggers indexing from Zotero UI)
 
-## v0.4.0 — Multilingual for real
+## v0.4.0 — Corpus correctness and SDK compatibility — SHIPPED 2026-08-20
+
+**Breaking for anyone parsing `source_ref` on the folder corpus.** Folder refs
+changed from `{index}:{rel}` to `r<hash>:{rel}`, and that value ships in MCP
+output as `source.ref`. Re-run any consumer that parses folder refs. The index
+migrates legacy rows in place at the next run, so no re-embedding is needed.
+
+- [x] Stable folder root ids in `source_ref`, with in-place legacy migration (#38)
+- [x] EPUB-only and DOCX-only Zotero attachments index and fetch (#44)
+- [x] mcp SDK 1.x and 2.x both supported; `<2` cap lifted (#45, #40)
+- [x] `partial_recall.mcp.compat.tool_input_schema` reads the Tool schema on both majors (#45)
+- [x] `ALL_TOOLS` on the MCP server; one list, not two (#45)
+- [x] CI matrix leg runs the suite on mcp `<2` and mcp `>=2` (#45)
+- [x] `uv.lock` relocked and consistent with the manifest (#42, #46)
+- [x] Stale repo names corrected in `docs/ARCHITECTURE.md` (#39)
+
+## v0.5.0 — Multilingual for real
 
 - [ ] Local manuscript image adapter (Tropy-compatible directory layout)
 - [ ] SigLIP multimodal embeddings for figures and plates in PDFs
@@ -221,7 +237,7 @@ changes. No version bump (still v0.2.4 on main).
 - [ ] Kraken integration for historical scripts (Greek, Latin, Devanagari, Arabic)
 - [ ] CITATION.cff + Zenodo DOI integration
 
-## v0.5.0 — IIIF and world manuscript archives
+## v0.6.0 — IIIF and world manuscript archives
 
 - [ ] IIIF Image API + Presentation API support
 - [ ] Adapter for British Library digitised manuscripts
