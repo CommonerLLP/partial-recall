@@ -9,6 +9,7 @@ import pytest
 
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.index.pipeline import run_indexing
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.semantic_status import (
     SEMANTIC_STATUS_TOOL,
     handle_semantic_status,
@@ -32,7 +33,7 @@ def indexed_store(tmp_path: Path, fixtures_dir: Path):
 
 
 def test_tool_schema_takes_no_arguments() -> None:
-    schema = SEMANTIC_STATUS_TOOL.inputSchema
+    schema = tool_input_schema(SEMANTIC_STATUS_TOOL)
     assert schema["type"] == "object"
     assert schema.get("properties", {}) == {}
     # No `required` fields, and additionalProperties is locked down.

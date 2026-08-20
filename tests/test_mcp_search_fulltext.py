@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.search_fulltext import (
     SEARCH_FULLTEXT_TOOL,
     handle_search_fulltext,
@@ -57,7 +58,7 @@ def seeded_store(tmp_path: Path) -> Iterator[VectorStore]:
 
 
 def test_tool_schema_requires_query() -> None:
-    schema = SEARCH_FULLTEXT_TOOL.inputSchema
+    schema = tool_input_schema(SEARCH_FULLTEXT_TOOL)
     assert "query" in schema["properties"]
     assert "query" in schema["required"]
     assert schema["properties"]["query"]["type"] == "string"

@@ -11,6 +11,7 @@ import pytest
 
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.index.pipeline import run_indexing
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.semantic_search import (
     SEMANTIC_SEARCH_TOOL,
     handle_semantic_search,
@@ -101,7 +102,7 @@ def mixed_corpus_store(tmp_path: Path) -> VectorStore:
 
 
 def test_tool_schema_has_required_fields() -> None:
-    schema = SEMANTIC_SEARCH_TOOL.inputSchema
+    schema = tool_input_schema(SEMANTIC_SEARCH_TOOL)
     assert "properties" in schema
     assert "query" in schema["properties"]
     assert "query" in schema.get("required", [])
@@ -112,7 +113,7 @@ def test_corpus_filter_accepts_any_corpus_name() -> None:
     register corpora (e.g. via dotted-path registry entries) whose names a
     hardcoded list can never anticipate, and the live DB already holds
     corpora outside the built-in adapter set."""
-    schema = SEMANTIC_SEARCH_TOOL.inputSchema
+    schema = tool_input_schema(SEMANTIC_SEARCH_TOOL)
     assert "enum" not in schema["properties"]["corpus"]
 
 
