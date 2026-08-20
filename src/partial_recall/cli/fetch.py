@@ -95,7 +95,10 @@ def fetch_command(
         if json_output:
             console.print(json.dumps({"error": "No attachment found"}))
         else:
-            console.print(f"[bold yellow]No PDF attachments found for item {item_key}.[/]")
+            console.print(
+                f"[bold yellow]No PDF, EPUB or DOCX attachment "
+                f"found for item {item_key}.[/]"
+            )
         raise typer.Exit(1)
 
     if json_output:

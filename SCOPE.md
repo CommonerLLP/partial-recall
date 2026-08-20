@@ -37,9 +37,8 @@ The text-corpus story is shipped:
   collections, library search, fetch, placement, and new-title discovery.
 
 The old `place` scope is closed. The old `fetch` scope is no longer the live
-scope document, but it is only partly shipped: PDF attachment resolution and
-reading-order text extraction are covered; EPUB attachment fetch remains a
-known gap.
+scope document. It is now shipped. `fetch` resolves PDF, EPUB, and DOCX
+attachments, and extracts reading-order text from each.
 
 ## Active Scope
 
@@ -70,7 +69,7 @@ Current scope is verification, not claims expansion:
 
 OCR and handwriting/text-recognition belong in `partial-recall` only as a
 generic, optional extraction backend. The engine may expose a protocol and
-provenance model; it should not hardwire one heavy vision stack into the core
+provenance model. It should not hardwire one heavy vision stack into the core
 install.
 
 The v0.4 planning target is:
@@ -93,12 +92,14 @@ Candidate backends to benchmark before adoption:
 No Surya or Chandra dependency should enter the default install without a
 benchmark against real CommonerLLP pages and a license review.
 
-### 4. Close Remaining Fetch Gaps
+### 4. Fetch Gaps — CLOSED
 
-The current `fetch` command handles Zotero PDF attachments. It does not yet
-resolve EPUB-only attachments through the same `item_key -> attachment -> file`
-path. If source-file retrieval for EPUB attachments is still required, implement
-it as a narrow extension of the existing fetch path, not as a new scope file.
+`fetch` resolves Zotero PDF, EPUB, and DOCX attachments through one
+`item_key -> attachment -> file` path. A PDF wins when an item carries more
+than one, because annotations and page numbers only exist on the PDF.
+
+Indexing covers the same three types. An EPUB-only or DOCX-only item is no
+longer catalogue-only.
 
 ## Engine Responsibilities
 
