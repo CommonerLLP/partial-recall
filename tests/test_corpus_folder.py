@@ -440,7 +440,7 @@ def test_reordered_roots_do_not_reembed(tmp_path: Path) -> None:
         )
         assert result.chunk_count == 0
         assert result.new_vector_count == 0
-        assert result.skipped_chunk_count == 2
+        assert result.skipped_source_count == 2
     finally:
         first_adapter.close()
         second_adapter.close()

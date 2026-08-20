@@ -48,6 +48,7 @@ class IndexResult:
     chunk_count: int
     new_vector_count: int
     skipped_chunk_count: int = 0  # extend-run: chunks already vectorised
+    skipped_source_count: int = 0  # extend-run: sources already fully covered
     extended: bool = False        # True if this was an extend-run pass
     interrupted: bool = False     # True if SIGINT/SIGTERM caused early exit
     last_processed_key: str | None = None  # set when interrupted
@@ -94,6 +95,7 @@ def run_indexing(
     activate: bool = True,
     extend_run_id: int | None = None,
     allow_provider_mismatch: bool = False,
+    rescan: bool = False,
     on_item_start: ProgressCallback | None = None,
 ) -> IndexResult:
     """Run an indexing pass under the single-writer index lock.
@@ -113,6 +115,7 @@ def run_indexing(
             activate=activate,
             extend_run_id=extend_run_id,
             allow_provider_mismatch=allow_provider_mismatch,
+            rescan=rescan,
             on_item_start=on_item_start,
         )
 
@@ -126,6 +129,7 @@ def _run_indexing(
     activate: bool = True,
     extend_run_id: int | None = None,
     allow_provider_mismatch: bool = False,
+    rescan: bool = False,
     on_item_start: ProgressCallback | None = None,
 ) -> IndexResult:
     """Run an indexing pass.
@@ -221,6 +225,7 @@ def _run_indexing(
     chunk_count = 0
     new_vector_count = 0
     skipped_chunk_count = 0
+    skipped_source_count = 0
 
     # Collect (chunk_id, text) pairs into batches for embedding
     pending: list[tuple[int, str]] = []
@@ -347,8 +352,26 @@ def _run_indexing(
             call_number=item.call_number,
             library_catalog=item.library_catalog,
         )
+        # Extend mode: find the sources of this item that already have a
+        # vector on every chunk. Extraction is the expensive step, and
+        # re-running it on those sources cannot produce new work.
+        #
+        # This replaces the sorted-order fast-skip the comment above
+        # rejects. Coverage does not depend on iteration order, so the
+        # hazard that removed the old optimisation cannot return here.
+        covered: set[tuple[str, str | None]] = set()
+        if extended and not rescan:
+            covered = store.covered_sources(
+                item_key=item.item_key,
+                corpus=item.corpus,
+                run_id=run_id,
+                chunker_version=CHUNKER_VERSION,
+            )
         # For each source: extract → chunk → record
         for source in adapter.get_sources(item):
+            if (source.source_type, source.source_ref) in covered:
+                skipped_source_count += 1
+                continue
             text = adapter.get_text(item, source)
             if not text:
                 continue
@@ -471,6 +494,7 @@ def _run_indexing(
             chunk_count=chunk_count,
             new_vector_count=new_vector_count,
             skipped_chunk_count=skipped_chunk_count,
+            skipped_source_count=skipped_source_count,
             extended=extended,
             interrupted=True,
             last_processed_key=last_completed_key,
@@ -491,6 +515,7 @@ def _run_indexing(
             run_id=run_id,
             walked_items=item_count, new_chunks=chunk_count,
             new_vectors=new_vector_count, skipped=skipped_chunk_count,
+            skipped_sources=skipped_source_count,
             total_items=total_items, total_chunks=total_chunks,
         )
         return IndexResult(
@@ -499,6 +524,7 @@ def _run_indexing(
             chunk_count=chunk_count,
             new_vector_count=new_vector_count,
             skipped_chunk_count=skipped_chunk_count,
+            skipped_source_count=skipped_source_count,
             extended=True,
         )
 

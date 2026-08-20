@@ -167,7 +167,9 @@ def test_extend_run_skips_already_vectorised_chunks(store: VectorStore) -> None:
     assert result.run_id == first.run_id
     assert result.new_vector_count == 0
     assert provider2.total_embedded == 0
-    assert result.skipped_chunk_count >= 2
+    # Since #48 the saving lands one level up: extraction is skipped for a
+    # fully covered source, so there are no chunks left to count.
+    assert result.skipped_source_count >= 2
 
 
 def test_extend_run_embeds_new_items_only(store: VectorStore) -> None:
@@ -188,7 +190,7 @@ def test_extend_run_embeds_new_items_only(store: VectorStore) -> None:
     assert provider2.total_embedded == 2
     assert result.new_vector_count == 2
     assert result.chunk_count == 2  # 2 new chunks inserted
-    assert result.skipped_chunk_count == 1  # original A skipped
+    assert result.skipped_source_count == 1  # original A skipped before extraction
 
     # Total vectors in run = 1 (from first) + 2 (top-up) = 3.
     n = store._conn.execute(
@@ -365,14 +367,43 @@ def test_extend_survives_chunk_text_hash_mismatch(store: VectorStore) -> None:
     )
     # Now extend with the same item but updated text ("alpha v2").
     # This simulates a regenerated source file — same position, different hash.
+    # Since #48 a covered source is not re-extracted, so --rescan is what
+    # reaches the changed text. That path must still not raise.
     provider2 = _Provider()
     result = run_indexing(
         adapter=_Adapter([("A", "alpha v2")]),
         store=store,
         provider=provider2,
         extend_run_id=first.run_id,
+        rescan=True,
     )
     assert result.extended is True
     # The chunk already has a vector in this run → skipped, not re-embedded.
     assert result.skipped_chunk_count >= 1
     assert provider2.total_embedded == 0
+
+
+def test_extend_skips_a_changed_source_without_rescan(store: VectorStore) -> None:
+    """The #48 trade, stated as a test rather than left as a surprise.
+
+    Nothing tracks attachment mtime, so extend cannot tell a rewritten file
+    from an untouched one. The default now skips a covered source, and
+    --rescan is the way to pick the change up.
+    """
+    first = run_indexing(
+        adapter=_Adapter([("A", "alpha v1")]),
+        store=store,
+        provider=_Provider(),
+    )
+    result = run_indexing(
+        adapter=_Adapter([("A", "alpha v2")]),
+        store=store,
+        provider=_Provider(),
+        extend_run_id=first.run_id,
+    )
+    assert result.skipped_source_count == 1
+    assert result.chunk_count == 0
+    stored = store._conn.execute(
+        "SELECT text_preview FROM chunks WHERE item_key = 'A'"
+    ).fetchone()["text_preview"]
+    assert stored == "alpha v1", "the change is invisible without --rescan"

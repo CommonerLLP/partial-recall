@@ -614,6 +614,47 @@ class VectorStore:
         ).fetchone()
         return row is not None
 
+    def covered_sources(
+        self,
+        *,
+        item_key: str,
+        corpus: str,
+        run_id: int,
+        chunker_version: str,
+    ) -> set[tuple[str, str | None]]:
+        """Return the sources of one item that need no extraction.
+
+        A source qualifies when it already has chunks and every one of
+        them carries a vector for `run_id`. One query per item, served by
+        idx_chunks_item.
+
+        Absence is the safe answer. A new source, a partially vectorised
+        source, and a source chunked by another chunker_version all stay
+        out of the set, so the caller extracts them.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT c.source_type,
+                   c.source_ref,
+                   COUNT(*)          AS total,
+                   COUNT(v.chunk_id) AS covered
+            FROM chunks c
+            LEFT JOIN vectors v
+              ON v.chunk_id = c.chunk_id AND v.run_id = ?
+            WHERE c.owner = 'local'
+              AND c.corpus = ?
+              AND c.item_key = ?
+              AND c.chunker_version = ?
+            GROUP BY c.source_type, c.source_ref
+            """,
+            (run_id, corpus, item_key, chunker_version),
+        ).fetchall()
+        return {
+            (r["source_type"], r["source_ref"])
+            for r in rows
+            if r["total"] > 0 and r["covered"] == r["total"]
+        }
+
     def chunk_exists(
         self,
         *,

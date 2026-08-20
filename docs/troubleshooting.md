@@ -96,6 +96,22 @@ distance_metric) are still enforced — the flag only waives
 provider+model identity. Chunk-level vector_exists dedup kicks in,
 so already-vectorised chunks are skipped at zero Gemini cost.
 
+## I edited a file in place, and `--extend` did not pick up the change
+
+Since v0.4.x, `--extend` skips extraction for a source whose chunks all
+carry a vector already. Re-reading such a source cannot produce new work,
+and on a large corpus that saving is most of the run.
+
+Nothing tracks attachment mtime, so extend cannot tell a rewritten file
+from an untouched one. Force a full pass:
+
+```zsh
+partial-recall index --extend --rescan
+```
+
+A new source on an existing item does not need the flag. A newly added
+EPUB has no chunks yet, so extend extracts it either way.
+
 ## macOS: editable install can't import `partial_recall`
 
 You'll see `ModuleNotFoundError: No module named 'partial_recall'`
