@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from partial_recall.embedding.types import EmbeddingBatch
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.place_item import PLACE_ITEM_TOOL, handle_place_item
 from partial_recall.store.vector_store import VectorStore
 
@@ -77,7 +78,7 @@ def store_with_two_items(tmp_path: Path):
 
 
 def test_tool_schema_requires_title() -> None:
-    schema = PLACE_ITEM_TOOL.inputSchema
+    schema = tool_input_schema(PLACE_ITEM_TOOL)
     assert "title" in schema["properties"]
     assert "title" in schema.get("required", [])
 
@@ -85,7 +86,7 @@ def test_tool_schema_requires_title() -> None:
 def test_corpus_filter_accepts_any_corpus_name() -> None:
     """The corpus filter must not carry a closed enum: external adapters
     register corpora whose names a hardcoded list can never anticipate."""
-    schema = PLACE_ITEM_TOOL.inputSchema
+    schema = tool_input_schema(PLACE_ITEM_TOOL)
     assert "enum" not in schema["properties"]["corpus"]
 
 

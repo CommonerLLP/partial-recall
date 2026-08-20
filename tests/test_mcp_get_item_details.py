@@ -9,6 +9,7 @@ import pytest
 
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
 from partial_recall.index.pipeline import run_indexing
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.get_item_details import (
     GET_ITEM_DETAILS_TOOL,
     handle_get_item_details,
@@ -32,7 +33,7 @@ def indexed_store(tmp_path: Path, fixtures_dir: Path):
 
 
 def test_tool_schema_requires_item_key() -> None:
-    schema = GET_ITEM_DETAILS_TOOL.inputSchema
+    schema = tool_input_schema(GET_ITEM_DETAILS_TOOL)
     assert "item_key" in schema["properties"]
     assert "item_key" in schema.get("required", [])
     # corpus is optional.

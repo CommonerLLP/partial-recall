@@ -58,6 +58,20 @@ from partial_recall.mcp.tools.whats_new import (
 )
 from partial_recall.store.vector_store import VectorStore
 
+# Every tool this server advertises. `_list_tools` returns it, and the
+# schema tests iterate it, so a new tool is covered without a second list.
+ALL_TOOLS: tuple[Tool, ...] = (
+    SEMANTIC_SEARCH_TOOL,
+    SEARCH_FULLTEXT_TOOL,
+    SEMANTIC_STATUS_TOOL,
+    GET_ITEM_DETAILS_TOOL,
+    LIST_COLLECTIONS_TOOL,
+    LIBRARY_SEARCH_TOOL,
+    PLACE_ITEM_TOOL,
+    FETCH_ITEM_TOOL,
+    WHATS_NEW_TOOL,
+)
+
 
 def build_server(
     *,
@@ -74,17 +88,7 @@ def build_server(
 
     @server.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
     async def _list_tools() -> list[Tool]:
-        return [
-            SEMANTIC_SEARCH_TOOL,
-            SEARCH_FULLTEXT_TOOL,
-            SEMANTIC_STATUS_TOOL,
-            GET_ITEM_DETAILS_TOOL,
-            LIST_COLLECTIONS_TOOL,
-            LIBRARY_SEARCH_TOOL,
-            PLACE_ITEM_TOOL,
-            FETCH_ITEM_TOOL,
-            WHATS_NEW_TOOL,
-        ]
+        return list(ALL_TOOLS)
 
     @server.call_tool()  # type: ignore[untyped-decorator]
     async def _call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:

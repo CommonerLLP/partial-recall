@@ -48,3 +48,37 @@ jobs:
         run: |
           partial-recall doctor || true
           partial-recall --version
+
+  mcp-versions:
+    name: pytest (mcp ${{ matrix.mcp }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The dependency allows both SDK majors. mcp 2.0.0 renamed the Tool
+        # input-schema field, so both must stay green or the rename is loose
+        # again. See src/partial_recall/mcp/compat.py.
+        mcp: ["<2", ">=2"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install partial-recall + dev + gemini extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,gemini]"
+          python -m pip install "mcp${{ matrix.mcp }}"
+
+      - name: Report the resolved mcp version
+        run: python -c "import importlib.metadata as m; print(m.version('mcp'))"
+
+      - name: Run tests (skip slow + live)
+        run: |
+          python -m pytest tests/ -q -m "not slow and not live" --tb=short

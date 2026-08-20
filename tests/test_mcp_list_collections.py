@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from partial_recall.mcp.compat import tool_input_schema
 from partial_recall.mcp.tools.get_item_details import handle_get_item_details
 from partial_recall.mcp.tools.list_collections import (
     LIST_COLLECTIONS_TOOL,
@@ -56,7 +57,7 @@ def store_with_collections(tmp_path: Path) -> Iterator[VectorStore]:
 
 
 def test_tool_schema() -> None:
-    schema = LIST_COLLECTIONS_TOOL.inputSchema
+    schema = tool_input_schema(LIST_COLLECTIONS_TOOL)
     assert schema["type"] == "object"
     assert schema["properties"]["corpus"]["default"] == "zotero"
 
