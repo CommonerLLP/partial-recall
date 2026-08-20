@@ -1357,7 +1357,7 @@ requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'local'", specifier = ">=0.20.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100.0" },
     { name = "keyring", marker = "extra == 'keyring'", specifier = ">=24.0" },
-    { name = "mcp", specifier = ">=1.0.0,<2" },
+    { name = "mcp", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "numpy", marker = "extra == 'faiss'", specifier = ">=1.26.0" },
