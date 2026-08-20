@@ -45,13 +45,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[/]` def
 
 ### Success criteria
 
-- [ ] `pipx install partial-recall` works on an Apple Silicon Mac
-- [ ] `partial-recall init` runs the first-run wizard; defaults to local provider; sets paths
-- [ ] `partial-recall index` indexes a 15k-item Zotero library end-to-end without crashing
-- [ ] `partial-recall serve` is reachable from Claude Code as an MCP server
-- [ ] `semantic_search` returns ranked results with `item_key`, score, preview, basic enriched metadata
+- [x] `pipx install partial-recall` works on an Apple Silicon Mac
+- [x] `partial-recall init` runs the first-run wizard; defaults to local provider; sets paths
+- [x] `partial-recall index` indexes a 15k-item Zotero library end-to-end without crashing
+- [x] `partial-recall serve` is reachable from Claude Code as an MCP server
+- [x] `semantic_search` returns ranked results with `item_key`, score, preview, basic enriched metadata
 - [ ] Disk footprint under ~1 GB for the 15k-item corpus
-- [ ] All tests pass on macOS
+      <!-- Unmeasured at the v0.0.1 local-provider default (384-dim int8).
+           The live index runs gemini-embedding-001 at 3072 dims, so it
+           cannot answer this criterion. Measure a 15k-item local-provider
+           index before ticking. -->
+- [x] All tests pass on macOS
 
 ---
 
@@ -67,7 +71,7 @@ the public can `pipx install`.
 > MCP tools, resumable indexing, multilingual fixtures, the works. What
 > actually shipped is much narrower (audit 2026-05-17). Rather than
 > rewrite the tag, this section now reflects what `v0.1.0` actually
-> contains; the previously-planned scope has been moved to **v0.2.0 —
+> contains. The previously-planned scope has been moved to **v0.2.0 —
 > Feature-complete release** below, which is what was historically
 > labelled v0.1.0 in this file. Later releases renumbered accordingly.
 
@@ -116,7 +120,7 @@ point-releases through to v0.3.0 (see those sections below).
 
 ### Known gaps shipped with v0.2.0 (sequenced into v0.2.x)
 
-These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases as separate sliceable units:
+These were part of the original v0.2.0 plan. They ship in v0.2.x point-releases as separate sliceable units:
 
 - Secrets via `keyring` (env-var fallback ships now; keyring → v0.2.x)
 - Full resumable indexing (`indexing_progress` writes per-batch, SIGINT/SIGTERM/`kill -9` resume)
@@ -146,7 +150,7 @@ These were part of the original v0.2.0 plan; they ship in v0.2.x point-releases 
 
 ## v0.2.x — point releases toward feature-complete
 
-Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced by leverage; see `docs/superpowers/specs/2026-05-18-partial-recall-v020-v030-sequencing.md` for the full plan.
+Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced by leverage. See `docs/superpowers/specs/2026-05-18-partial-recall-v020-v030-sequencing.md` for the full plan.
 
 ### v0.2.1: reliability foundation — SHIPPED 2026-05-18
 - [x] A3 recorded API fixtures (`vcrpy` + `pytest-recording`) for Gemini — infrastructure + `@pytest.mark.live` opt-in marker + scrubbing config. Cassettes themselves recorded in a follow-up once a real key is used.
@@ -175,7 +179,7 @@ Each slice ships as a tagged minor (`v0.2.1`, `v0.2.2`, ...). Order is sequenced
 
 ### Post-v0.2.4 docs sweep — landed 2026-05-19 (no version bump; docs-only)
 Docs covering features already shipped through v0.2.4. No code
-changes; no version bump (still v0.2.4 on main).
+changes. No version bump (still v0.2.4 on main).
 - [x] A5 auto-generated config reference from Pydantic. `scripts/generate_config_reference.py` walks every Pydantic model and emits `docs/config/reference.md`; the doc is the code's introspection so it cannot drift.
 - [x] E3 `CITATION.cff` at repo root — standard machine-readable citation, AGPL-3.0-or-later.
 - [x] E4 README expansion: extras table; install + first-run section; pointers to walkthrough + troubleshooting + config reference.
