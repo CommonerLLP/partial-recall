@@ -8,7 +8,28 @@ from pathlib import Path
 
 from partial_recall.config.models import ZoteroConfig
 from partial_recall.corpus.adapters.zotero import ZoteroAdapter
+from partial_recall.extract.docx import extract_docx_text
+from partial_recall.extract.epub import extract_epub_text
 from partial_recall.extract.pdf import extract_pdf_text
+
+# Attachment content types this module can fetch, in preference order.
+# A PDF wins when an item carries more than one, because annotations and
+# page numbers only exist on the PDF.
+_FETCHABLE = (
+    ("application/pdf", ".pdf"),
+    ("application/epub+zip", ".epub"),
+    ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"),
+)
+_EXTRACTORS = {
+    ".pdf": extract_pdf_text,
+    ".epub": extract_epub_text,
+    ".docx": extract_docx_text,
+}
+
+
+def _extract(path: Path) -> str | None:
+    extractor = _EXTRACTORS.get(path.suffix.lower())
+    return extractor(path) if extractor else None
 
 
 @dataclass
@@ -47,20 +68,22 @@ def fetch_zotero_attachment(
 
     parent_id = row["itemID"]
 
-    # 2. Get attachments (prefer PDFs)
-    att_rows = adapter._conn.execute("""
+    # 2. Get attachments. A PDF wins when the item carries more than one.
+    placeholders = ",".join("?" * len(_FETCHABLE))
+    att_rows = adapter._conn.execute(f"""
         SELECT a.itemID, a.path, a.linkMode, a.contentType, child.key as att_key, child.libraryID
         FROM itemAttachments a
         JOIN items child ON child.itemID = a.itemID
-        WHERE a.parentItemID = ? 
-          AND a.contentType = 'application/pdf'
+        WHERE a.parentItemID = ?
+          AND a.contentType IN ({placeholders})
           AND child.itemID NOT IN (SELECT itemID FROM deletedItems)
-    """, (parent_id,)).fetchall()
+    """, (parent_id, *(ct for ct, _ in _FETCHABLE))).fetchall()
 
     if not att_rows:
         return FetchResult(item_key, None, None, None, None, None)
 
-    # Pick the first PDF
+    order = {ct: i for i, (ct, _) in enumerate(_FETCHABLE)}
+    att_rows.sort(key=lambda r: order.get((r["contentType"] or "").lower(), len(order)))
     att = att_rows[0]
     att_key = att["att_key"]
     content_type = att["contentType"]
@@ -77,11 +100,13 @@ def fetch_zotero_attachment(
         # it might be in prefs.js. For now, we return absolute if it's absolute, else error.
         pass
 
+    suffix = dict(_FETCHABLE).get((content_type or "").lower(), ".pdf")
+
     local_dir = adapter.storage_path / att_key
     if local_dir.exists():
         for f in local_dir.iterdir():
-            if f.suffix.lower() == ".pdf":
-                text = extract_pdf_text(f) if extract_text else None
+            if f.suffix.lower() == suffix:
+                text = _extract(f) if extract_text else None
                 return FetchResult(item_key, att_key, f, text, "local", content_type)
 
     # 4. Fallback to Web API
@@ -114,7 +139,7 @@ def fetch_zotero_attachment(
 
     req = urllib.request.Request(url, headers={"Zotero-API-Key": api_key})
 
-    filename = "attachment.pdf"
+    filename = f"attachment{suffix}"
     if path_val.startswith("storage:"):
         filename = path_val.split(":", 1)[1]
 
@@ -127,5 +152,5 @@ def fetch_zotero_attachment(
     except urllib.error.HTTPError as e:
         raise ValueError(f"Failed to fetch attachment from Zotero API: HTTP {e.code}") from e
 
-    text = extract_pdf_text(cache_file) if extract_text else None
+    text = _extract(cache_file) if extract_text else None
     return FetchResult(item_key, att_key, cache_file, text, "web", content_type)

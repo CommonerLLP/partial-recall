@@ -1,7 +1,9 @@
 """MCP tool: fetch_item.
 
-Given a Zotero parent item_key, resolve the child attachment key, fetch 
-the PDF (or its extracted text), and return structured JSON.
+Given a Zotero parent item_key, resolve the child attachment key, fetch
+the file (or its extracted text), and return structured JSON. PDF, EPUB
+and DOCX attachments are supported. A PDF wins when an item has more
+than one.
 """
 
 from __future__ import annotations
@@ -112,7 +114,10 @@ async def handle_fetch_item(
         adapter.close()
 
     if not res.attachment_key:
-        return [_error(f"No PDF attachments found for item '{item_key}'.", "Check the item key.")]
+        return [_error(
+            f"No PDF, EPUB or DOCX attachment found for item '{item_key}'.",
+            "Check the item key.",
+        )]
 
     payload = {
         "item_key": res.item_key,

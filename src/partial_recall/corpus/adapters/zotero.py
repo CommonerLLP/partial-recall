@@ -33,6 +33,15 @@ from partial_recall.extract.pdf import PdfExtractionError, extract_pdf_text
 # Zotero annotation types we treat as text. See module docstring.
 _TEXTUAL_ANNOTATION_TYPES = (1, 2, 5)
 
+# Zotero attachment content types this adapter can extract text from, and
+# the file suffix each one lands on inside storage/<KEY>/.
+_ATTACHMENT_CONTENT_TYPES = {
+    "application/pdf": "pdf",
+    "application/epub+zip": "epub",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+}
+_ATTACHMENT_SUFFIXES = {"pdf": ".pdf", "epub": ".epub", "docx": ".docx"}
+
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 # After stripping inline tags around punctuation we can get "word ." —
@@ -229,7 +238,7 @@ class ZoteroAdapter:
             yield Source(source_type="abstract", source_ref=None, kind=ItemKind.METADATA)
         att_rows = self._conn.execute(
             """
-            SELECT a.itemID, a.path, child.key as att_key
+            SELECT a.itemID, a.path, a.contentType, child.key as att_key
             FROM itemAttachments a
             JOIN items child ON child.itemID = a.itemID
             WHERE a.parentItemID = ?
@@ -243,15 +252,19 @@ class ZoteroAdapter:
             (item_id,),
         ).fetchall()
         for att in att_rows:
-            # Determine source_type from content type or path
-            # But we don't have contentType in the SELECT output.
-            # Let's infer from extension or att_key
-            source_type = "pdf"
-            if att["path"]:
-                if att["path"].lower().endswith(".epub"):
-                    source_type = "epub"
-                elif att["path"].lower().endswith(".docx"):
-                    source_type = "docx"
+            # contentType is the authority. The WHERE clause already limits
+            # the rows to the three types below, so the fallback only guards
+            # against a NULL or an unexpected casing.
+            source_type = _ATTACHMENT_CONTENT_TYPES.get(
+                (att["contentType"] or "").lower()
+            )
+            if source_type is None:
+                source_type = "pdf"
+                if att["path"]:
+                    for st, suffix in _ATTACHMENT_SUFFIXES.items():
+                        if att["path"].lower().endswith(suffix):
+                            source_type = st
+                            break
 
             yield Source(
                 source_type=source_type,
@@ -313,7 +326,7 @@ class ZoteroAdapter:
         if source.source_type == "abstract":
             return item.abstract
         if source.source_type == "pdf":
-            pdf_path = self._resolve_pdf_path(source)
+            pdf_path = self._resolve_attachment_path(source)
             if pdf_path is None or not pdf_path.exists():
                 return None
             try:
@@ -321,12 +334,12 @@ class ZoteroAdapter:
             except PdfExtractionError:
                 return None
         if source.source_type == "epub":
-            epub_path = self._resolve_pdf_path(source)
+            epub_path = self._resolve_attachment_path(source)
             if epub_path is None or not epub_path.exists():
                 return None
             return extract_epub_text(epub_path)
         if source.source_type == "docx":
-            docx_path = self._resolve_pdf_path(source)
+            docx_path = self._resolve_attachment_path(source)
             if docx_path is None or not docx_path.exists():
                 return None
             return extract_docx_text(docx_path)
@@ -441,19 +454,25 @@ class ZoteroAdapter:
         joined = " ".join(parts).strip()
         return joined or None
 
-    def _resolve_pdf_path(self, source: Source) -> Path | None:
-        """Resolve a PDF source_ref like 'pdf:<key>' to a filesystem path.
+    def _resolve_attachment_path(self, source: Source) -> Path | None:
+        """Resolve an attachment source_ref like 'epub:<key>' to a file path.
 
         Zotero stores attachments at storage/<KEY>/<filename>. We list the
-        directory and return the first .pdf file.
+        directory and return the first file whose suffix matches the source
+        type. The prefix and the suffix must agree, so a 'pdf:' ref never
+        returns an .epub and an 'epub:' ref never returns a .pdf.
         """
-        if not source.source_ref or not source.source_ref.startswith("pdf:"):
+        suffix = _ATTACHMENT_SUFFIXES.get(source.source_type)
+        if suffix is None:
             return None
-        key = source.source_ref[len("pdf:") :]
+        prefix = f"{source.source_type}:"
+        if not source.source_ref or not source.source_ref.startswith(prefix):
+            return None
+        key = source.source_ref[len(prefix) :]
         att_dir = self.storage_path / key
         if not att_dir.exists():
             return None
         for f in att_dir.iterdir():
-            if f.suffix.lower() == ".pdf":
+            if f.suffix.lower() == suffix:
                 return f
         return None
