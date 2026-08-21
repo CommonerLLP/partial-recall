@@ -147,3 +147,33 @@ def test_load_config_applies_the_configured_backend(tmp_path: Path) -> None:
     cfg = load_config(cfg_path)
     assert cfg.index.pdf_backend == "docling"
     assert get_pdf_backend() == "docling"
+
+
+def test_the_converter_warns_before_the_first_download(
+    fake_docling: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first run fetches models from HuggingFace. Silence reads as a hang."""
+    events: list[str] = []
+    monkeypatch.setattr(
+        docling_pdf.log, "info", lambda event, **kw: events.append(event)
+    )
+    target = tmp_path / "report.pdf"
+    target.write_bytes(b"%PDF-1.4 not really a pdf")
+    set_pdf_backend("docling")
+    extract_pdf_text(target)
+    assert "docling.converter.loading" in events
+
+
+def test_the_warning_fires_once_not_per_document(
+    fake_docling: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(
+        docling_pdf.log, "info", lambda event, **kw: events.append(event)
+    )
+    set_pdf_backend("docling")
+    for name in ("a.pdf", "b.pdf", "c.pdf"):
+        target = tmp_path / name
+        target.write_bytes(b"%PDF-1.4 not really a pdf")
+        extract_pdf_text(target)
+    assert events.count("docling.converter.loading") == 1

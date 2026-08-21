@@ -96,6 +96,27 @@ distance_metric) are still enforced — the flag only waives
 provider+model identity. Chunk-level vector_exists dedup kicks in,
 so already-vectorised chunks are skipped at zero Gemini cost.
 
+## The docling backend stalls on its first run
+
+It is downloading models, not hanging.
+
+Docling ships OCR and layout weights separately from the package. The first
+conversion fetches them from HuggingFace, which can take minutes on a slow
+link. Every run after that is local, because the weights are cached.
+
+partial-recall logs `docling.converter.loading` before the fetch starts. Raise
+the log level if you want to watch it:
+
+```zsh
+partial-recall -v index
+```
+
+**This backend is the one part of partial-recall that needs network.** The
+default `pymupdf` backend never does, and neither does a local embedding
+provider. Choosing `pdf_backend = "docling"` opts into that one fetch.
+
+To keep the machine fully offline, stay on the default backend.
+
 ## I edited a file in place, and `--extend` did not pick up the change
 
 Since v0.4.x, `--extend` skips extraction for a source whose chunks all
