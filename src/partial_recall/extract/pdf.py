@@ -17,11 +17,36 @@ class PdfExtractionError(PartialRecallError):
     """Raised when a PDF cannot be opened or read."""
 
 
-def extract_pdf_text(path: Path) -> str:
-    """Return concatenated text from all pages of a PDF.
+# Which reader `extract_pdf_text` uses. Set once at startup from config, so
+# the five adapter call sites need no plumbing. "pymupdf" is the default and
+# the only backend with no extra dependency.
+_BACKEND = "pymupdf"
 
-    Empty pages contribute nothing. Returns empty string for an image-only PDF.
+
+def set_pdf_backend(name: str) -> None:
+    """Select the PDF reader for this process."""
+    global _BACKEND
+    if name not in ("pymupdf", "docling"):
+        raise ValueError(f"unknown pdf backend: {name!r}")
+    _BACKEND = name
+
+
+def get_pdf_backend() -> str:
+    """Report the PDF reader this process uses."""
+    return _BACKEND
+
+
+def extract_pdf_text(path: Path) -> str:
+    """Return the text of a PDF using the configured backend.
+
+    The pymupdf backend concatenates pages; empty pages contribute nothing,
+    and an image-only PDF yields an empty string. The docling backend returns
+    Markdown with tables and reading order preserved.
     """
+    if _BACKEND == "docling":
+        from partial_recall.extract.docling_pdf import extract_pdf_text_docling
+
+        return extract_pdf_text_docling(path)
     pages = extract_pdf_text_by_page(path)
     return "\n\n".join(p for p in pages if p)
 

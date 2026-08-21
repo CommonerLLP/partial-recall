@@ -60,6 +60,13 @@ multilingual = [
 gemini = [
     "httpx>=0.27.0",
 ]
+docling = [
+    # Structured PDF extraction: layout, reading order, table structure.
+    # Heavy and deliberately optional. It pulls torch, torchvision, and
+    # opencv, and it pins an older transformers than sentence-transformers
+    # wants, so [docling] and [multilingual] do not belong in one env.
+    "docling>=2.0.0,<3",
+]
 keyring = [
     # Cross-platform credential storage:
     #   macOS  → Keychain

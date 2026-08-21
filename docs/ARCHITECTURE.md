@@ -106,6 +106,31 @@ You write ~200 lines. You get a production search stack.
 
 ---
 
+## PDF extraction backends
+
+`extract_pdf_text` reads a PDF through one of two backends. The process picks
+one at config load, so the five adapter call sites need no plumbing.
+
+| backend | reads | needs |
+|---|---|---|
+| `pymupdf` (default) | positioned text blocks, sorted into columns | nothing extra |
+| `docling` | layout, reading order, and table structure, as Markdown | the `[docling]` extra |
+
+Set it with `pdf_backend` under `[index]` in `config.toml`.
+
+**Use `docling` for scanned or multi-column documents.** The block reader sorts
+text by position, which is right for an article and wrong for a table. It
+collapses a row into one padded line, drops the column headers, and can order a
+page's blocks in a way that reads plausibly and is not the document's order.
+
+**`[docling]` and `[multilingual]` do not belong in one environment.** Docling
+pulls torch, torchvision, and opencv, and it pins an older `transformers` than
+`sentence-transformers` wants. The `all` extra therefore excludes it. Install
+docling in its own environment.
+
+The backend is a front-end to the corpus. It changes what reaches the chunker.
+It does not touch chunking, embeddings, FTS, or the vector store.
+
 ## What a new domain repo looks like
 
 A domain repo has exactly three jobs:
@@ -237,6 +262,7 @@ Repeating that extraction in every new domain repo is the wrong move.
 ║  └── [SansadAdapter]              PLANNED — lives in commoner-analyse║
 ║                                                                      ║
 ║  extract/pdf.py                                                      ║
+║  └── extract_pdf_text(path)       backend: pymupdf | docling         ║
 ║  └── extract_pdf_text(path)       pypdf + pdfplumber                 ║
 ║                                                                      ║
 ║  chunk/                                                              ║

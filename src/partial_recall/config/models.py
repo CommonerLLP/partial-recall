@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # Known values — kept narrow in v0.0.1; expanded as providers/adapters are added.
 EmbeddingProviderName = Literal["local-onnx", "gemini", "sentence-transformer"]
 QuantizationName = Literal["int8", "float16", "float32"]
+PdfBackendName = Literal["pymupdf", "docling"]
 ServerTransport = Literal["stdio", "http"]
 ServerAuthMode = Literal["none", "token", "oauth"]
 LoggingFormat = Literal["human", "json"]
@@ -35,6 +36,10 @@ class IndexConfig(BaseModel):
     chunker: str = "recursive-char-1024-128-v1"
     chunk_size: int = Field(default=1024, ge=128, le=8192)
     chunk_overlap: int = Field(default=128, ge=0, le=1024)
+    # "pymupdf" reads positioned text blocks and needs no extra dependency.
+    # "docling" recovers layout, reading order, and table structure, and needs
+    # the [docling] extra. Prefer it for scanned or multi-column documents.
+    pdf_backend: PdfBackendName = "pymupdf"
 
 
 class ZoteroConfig(BaseModel):
