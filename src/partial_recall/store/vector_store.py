@@ -264,14 +264,22 @@ class VectorStore:
         archive_location: str | None = None,
         call_number: str | None = None,
         library_catalog: str | None = None,
+        volume: str | None = None,
+        edition: str | None = None,
+        series: str | None = None,
+        series_number: str | None = None,
+        number_of_volumes: str | None = None,
+        publisher: str | None = None,
+        place: str | None = None,
     ) -> None:
         self._conn.execute(
             """
             INSERT INTO items (
                 item_key, corpus, item_type, title, date, creators_json,
                 abstract, metadata_hash, last_indexed_at, corpus_ref,
-                archive, archive_location, call_number, library_catalog
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                archive, archive_location, call_number, library_catalog,
+                volume, edition, series, series_number, number_of_volumes, publisher, place
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (owner, corpus, item_key) DO UPDATE SET
                 item_type = excluded.item_type,
                 title = excluded.title,
@@ -284,12 +292,20 @@ class VectorStore:
                 archive = excluded.archive,
                 archive_location = excluded.archive_location,
                 call_number = excluded.call_number,
-                library_catalog = excluded.library_catalog
+                library_catalog = excluded.library_catalog,
+                volume = excluded.volume,
+                edition = excluded.edition,
+                series = excluded.series,
+                series_number = excluded.series_number,
+                number_of_volumes = excluded.number_of_volumes,
+                publisher = excluded.publisher,
+                place = excluded.place
             """,
             (
                 item_key, corpus, item_type, title, date, creators_json,
                 abstract, metadata_hash, last_indexed_at, corpus_ref,
                 archive, archive_location, call_number, library_catalog,
+                volume, edition, series, series_number, number_of_volumes, publisher, place,
             ),
         )
 

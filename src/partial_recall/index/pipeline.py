@@ -351,6 +351,13 @@ def _run_indexing(
             archive_location=item.archive_location,
             call_number=item.call_number,
             library_catalog=item.library_catalog,
+            volume=item.volume,
+            edition=item.edition,
+            series=item.series,
+            series_number=item.series_number,
+            number_of_volumes=item.number_of_volumes,
+            publisher=item.publisher,
+            place=item.place,
         )
         # Extend mode: find the sources of this item that already have a
         # vector on every chunk. Extraction is the expensive step, and

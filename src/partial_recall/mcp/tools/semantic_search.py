@@ -94,6 +94,15 @@ SEMANTIC_SEARCH_TOOL: Tool = Tool(
 )
 
 
+def _bibliographic(r: SearchResult) -> dict[str, Any]:
+    """Return the populated bibliographic fields, dropping the empty ones."""
+    fields = {n: getattr(r, n, None) for n in (
+        "volume", "edition", "series", "series_number",
+        "number_of_volumes", "publisher", "place",
+    )}
+    return {k: v for k, v in fields.items() if v}
+
+
 def _serialise_result(r: SearchResult) -> dict[str, Any]:
     """Convert a SearchResult into the JSON shape from design spec §9.3."""
     return {
@@ -107,6 +116,10 @@ def _serialise_result(r: SearchResult) -> dict[str, Any]:
             "creators": r.creators,
             "date": r.date,
             "abstract": r.abstract,
+            # Only present when populated, so a single-volume hit stays
+            # compact. For a multi-volume set this is what makes the hit
+            # citable (#41).
+            **_bibliographic(r),
         },
         "source": {
             "type": r.source_type,

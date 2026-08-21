@@ -112,11 +112,25 @@ async def handle_search_fulltext(
                 "text_preview": row["text_preview"],
                 "title": row["title"],
                 "date": row["date"],
+                # Only when populated (#41). A multi-volume hit needs the
+                # volume to be citable; a single-volume one stays compact.
+                **{n: row[n] for n in _BIB_FIELDS if row[n]},
             }
             for idx, row in enumerate(rows)
         ],
     }
     return [TextContent(type="text", text=json.dumps(payload, indent=2))]
+
+
+_BIB_FIELDS = (
+    "volume",
+    "edition",
+    "series",
+    "series_number",
+    "number_of_volumes",
+    "publisher",
+    "place",
+)
 
 
 def _run_fts_query(
@@ -139,7 +153,14 @@ def _run_fts_query(
             c.source_ref      AS source_ref,
             c.text_preview    AS text_preview,
             i.title           AS title,
-            i.date            AS date
+            i.date            AS date,
+            i.volume            AS volume,
+            i.edition           AS edition,
+            i.series            AS series,
+            i.series_number     AS series_number,
+            i.number_of_volumes AS number_of_volumes,
+            i.publisher         AS publisher,
+            i.place             AS place
         FROM chunks_fts
         JOIN chunks c ON c.chunk_id = chunks_fts.rowid
         LEFT JOIN items i
