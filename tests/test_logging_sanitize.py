@@ -93,15 +93,15 @@ def test_lookalike_non_sensitive_keys_pass_through() -> None:
 
 def test_home_path_in_string_value_is_redacted() -> None:
     out = _run({
-        "msg": "opened /Users/scholar/Zotero/zotero.sqlite for indexing",
+        "msg": "opened /Users/scholar/Zotero/zotero.sqlite for indexing",  # leak-ok
     })
-    assert "/Users/scholar" not in out["msg"]
+    assert "/Users/scholar" not in out["msg"]  # leak-ok
     assert out["msg"] == "opened ~/Zotero/zotero.sqlite for indexing"
 
 
 def test_linux_home_path_redacted() -> None:
-    out = _run({"path": "/home/bahujan-scholar/Documents/library.bib"})
-    assert "/home/bahujan-scholar" not in out["path"]
+    out = _run({"path": "/home/bahujan-scholar/Documents/library.bib"})  # leak-ok
+    assert "/home/bahujan-scholar" not in out["path"]  # leak-ok
     assert out["path"].startswith("~/")
 
 
@@ -113,16 +113,16 @@ def test_windows_home_path_redacted() -> None:
 
 def test_pathlike_objects_are_handled() -> None:
     out = _run({"vector_db_path": Path.home() / "Library" / "vectors.sqlite"})
-    assert "/Users/" not in out["vector_db_path"]
+    assert "/Users/" not in out["vector_db_path"]  # leak-ok
     assert "~" in out["vector_db_path"]
 
 
 def test_multiple_paths_in_one_string() -> None:
     out = _run({
-        "event": "moved /Users/scholar/a.pdf to /Users/scholar/b.pdf",
+        "event": "moved /Users/scholar/a.pdf to /Users/scholar/b.pdf",  # leak-ok
     })
     # Both prefixes replaced.
-    assert "/Users/scholar" not in out["event"]
+    assert "/Users/scholar" not in out["event"]  # leak-ok
     assert out["event"].count("~") >= 2
 
 
