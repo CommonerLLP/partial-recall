@@ -197,7 +197,7 @@ changes. No version bump (still v0.2.4 on main).
 - [x] `CalibreAdapter` (Calibre e-book library via `metadata.db`; no Calibre install required; EPUB + PDF + TXT)
 - [x] EPUB extractor (stdlib zip + html.parser; no ebooklib dep)
 - [x] DOCX extractor (stdlib zip + xml.etree; no python-docx dep; for humanities scholars using Word)
-- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.5.0).
+- [x] `SentenceTransformerProvider` — any HuggingFace sentence-transformers model; LaBSE and BGE-M3 supported; auto CUDA/MPS/CPU detection. Language coverage per model documentation; not independently verified by partial-recall (planned v0.6.0).
 - [x] Hardware-aware, language-aware init wizard — detects RAM + chip, surveys corpus languages, shows ranked model ladder with provenance (maintainer, HQ country, open-weights, license, documented military contracts, data sovereignty)
 - [x] Pre-release liability disclaimer in init wizard and README
 - [x] `[embedding] device = "auto"` config field (CUDA → MPS → CPU auto-detection)
@@ -205,7 +205,7 @@ changes. No version bump (still v0.2.4 on main).
 - [x] Fix: Zotero collection sync used closed adapter connection
 - [x] `partial-recall doctor --fix` (iCloud UF_HIDDEN fix for .pth files)
 
-**Deferred to v0.5.0 or later:**
+**Deferred to v0.6.0 or later:**
 - [/] Locale-aware embedding routing (Tamil chunks → Tamil-strong embedder; Persian → Persian-strong)
 - [/] i18n: Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, Portuguese interface strings
 - [/] Better chunking: semantic-aware via `blingfire` or `spaCy`; tokenizer-aware for CJK
@@ -228,7 +228,22 @@ migrates legacy rows in place at the next run, so no re-embedding is needed.
 - [x] `uv.lock` relocked and consistent with the manifest (#42, #46)
 - [x] Stale repo names corrected in `docs/ARCHITECTURE.md` (#39)
 
-## v0.5.0 — Multilingual for real
+## v0.5.0 — Citable results and structured extraction — SHIPPED 2026-08-21
+
+**Multi-volume sets are citable again.** The Zotero adapter dropped `volume`,
+`edition`, and `series`. Every volume of a collected-works edition therefore
+returned as the same undifferentiated title. Schema migration 0004 takes the
+store from version 3 to 4. Existing rows hold NULL until the next index run.
+
+- [x] Zotero bibliographic fields reach `semantic_search`, `search_fulltext`,
+      and `get_item_details` (#53, closes #41)
+- [x] Optional `docling` PDF backend: layout, reading order, table structure (#50)
+- [x] `--extend` skips extraction for sources already covered by the run (#49)
+- [x] `--rescan` forces full extraction when a file changed in place (#49)
+- [x] Docling's first-run model download named in the docs (#51)
+- [x] Pre-commit false positives cleared, so `--no-verify` is no longer routine (#52)
+
+## v0.6.0 — Multilingual for real
 
 - [ ] Local manuscript image adapter (Tropy-compatible directory layout)
 - [ ] SigLIP multimodal embeddings for figures and plates in PDFs
@@ -237,7 +252,7 @@ migrates legacy rows in place at the next run, so no re-embedding is needed.
 - [ ] Kraken integration for historical scripts (Greek, Latin, Devanagari, Arabic)
 - [ ] CITATION.cff + Zenodo DOI integration
 
-## v0.6.0 — IIIF and world manuscript archives
+## v0.7.0 — IIIF and world manuscript archives
 
 - [ ] IIIF Image API + Presentation API support
 - [ ] Adapter for British Library digitised manuscripts
