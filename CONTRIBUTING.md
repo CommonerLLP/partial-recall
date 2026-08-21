@@ -21,7 +21,7 @@ Open an issue at https://github.com/CommonerLLP/partial-recall/issues. Include:
 
 ## Translations
 
-The project ships in English only. i18n infrastructure is not yet in place — this is planned for v0.5.0. When it is ready, priority languages will be Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, and Portuguese.
+The project ships in English only. i18n infrastructure is not yet in place — this is planned for v0.6.0. When it is ready, priority languages will be Hindi, Tamil, Bengali, Marathi, Urdu, Swahili, Spanish, and Portuguese.
 
 If you want to contribute translations, open an issue first so we can coordinate once the infrastructure is ready.
 
