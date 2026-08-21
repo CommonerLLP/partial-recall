@@ -205,7 +205,19 @@ class ZoteroAdapter:
             archive_location = fields.get("archiveLocation")
             call_number = fields.get("callNumber")
             library_catalog = fields.get("libraryCatalog")
-            metadata_hash = self._compute_metadata_hash(title, date, creators, abstract)
+            # #41: for a multi-volume set these are the only fields that
+            # tell one volume from another.
+            volume = fields.get("volume")
+            edition = fields.get("edition")
+            series = fields.get("series")
+            series_number = fields.get("seriesNumber")
+            number_of_volumes = fields.get("numberOfVolumes")
+            publisher = fields.get("publisher")
+            place = fields.get("place")
+            metadata_hash = self._compute_metadata_hash(
+                title, date, creators, abstract,
+                volume=volume, edition=edition, series_number=series_number,
+            )
             yield Item(
                 item_key=item_key,
                 corpus="zotero",
@@ -219,6 +231,13 @@ class ZoteroAdapter:
                 archive_location=archive_location,
                 call_number=call_number,
                 library_catalog=library_catalog,
+                volume=volume,
+                edition=edition,
+                series=series,
+                series_number=series_number,
+                number_of_volumes=number_of_volumes,
+                publisher=publisher,
+                place=place,
             )
 
     def get_sources(self, item: Item) -> Iterator[Source]:
@@ -390,7 +409,20 @@ class ZoteroAdapter:
         date: str | None,
         creators: list[dict[str, str]],
         abstract: str | None,
+        *,
+        volume: str | None = None,
+        edition: str | None = None,
+        series_number: str | None = None,
     ) -> str:
+        """Hash the fields that identify one item.
+
+        volume, edition, and series_number joined in for #41. Without
+        them every volume of a multi-volume set hashed the same, because
+        the set shares one title, one date, and one list of creators.
+
+        The column is write-only today — nothing reads it back or
+        compares it — so widening the input re-processes nothing.
+        """
         h = hashlib.sha256()
         h.update((title or "").encode("utf-8"))
         h.update(b"\x00")
@@ -399,6 +431,9 @@ class ZoteroAdapter:
         h.update(json.dumps(creators, sort_keys=True).encode("utf-8"))
         h.update(b"\x00")
         h.update((abstract or "").encode("utf-8"))
+        for extra in (volume, edition, series_number):
+            h.update(b"\x00")
+            h.update((extra or "").encode("utf-8"))
         return h.hexdigest()
 
     def _get_note_text(self, source: Source) -> str | None:

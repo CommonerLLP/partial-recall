@@ -32,6 +32,16 @@ class Item:
     archive_location: str | None = None
     call_number: str | None = None
     library_catalog: str | None = None
+    # Bibliographic fields (#41). For a multi-volume set these are the
+    # only thing that tells one volume from another: title, date, and
+    # creators are identical across the whole set.
+    volume: str | None = None
+    edition: str | None = None
+    series: str | None = None
+    series_number: str | None = None
+    number_of_volumes: str | None = None
+    publisher: str | None = None
+    place: str | None = None
 
 
 @dataclass(frozen=True)

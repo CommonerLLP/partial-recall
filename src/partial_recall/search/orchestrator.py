@@ -35,6 +35,15 @@ class SearchResult:
     char_offset_end: int | None
     text_preview: str | None
     detected_locale: str | None
+    # Bibliographic fields (#41). For a multi-volume set these are the
+    # only thing that tells one hit from another.
+    volume: str | None = None
+    edition: str | None = None
+    series: str | None = None
+    series_number: str | None = None
+    number_of_volumes: str | None = None
+    publisher: str | None = None
+    place: str | None = None
 
 
 def search(
@@ -77,7 +86,8 @@ def search(
     placeholders = ",".join("?" * len(item_keys))
     corpus_placeholders = ",".join("?" * len(corpus_values))
     item_rows = store._conn.execute(
-        f"""SELECT corpus, item_key, item_type, title, date, creators_json, abstract
+        f"""SELECT corpus, item_key, item_type, title, date, creators_json, abstract,
+                   volume, edition, series, series_number, number_of_volumes, publisher, place
             FROM items
             WHERE corpus IN ({corpus_placeholders})
               AND item_key IN ({placeholders})""",  # noqa: S608
@@ -91,6 +101,13 @@ def search(
             "date": row["date"],
             "creators": json.loads(row["creators_json"]) if row["creators_json"] else [],
             "abstract": row["abstract"],
+            "volume": row["volume"],
+            "edition": row["edition"],
+            "series": row["series"],
+            "series_number": row["series_number"],
+            "number_of_volumes": row["number_of_volumes"],
+            "publisher": row["publisher"],
+            "place": row["place"],
         }
 
     results: list[SearchResult] = []
@@ -118,5 +135,12 @@ def search(
             char_offset_end=h.char_offset_end,
             text_preview=h.text_preview,
             detected_locale=h.detected_locale,
+            volume=meta.get("volume"),  # type: ignore[arg-type]
+            edition=meta.get("edition"),  # type: ignore[arg-type]
+            series=meta.get("series"),  # type: ignore[arg-type]
+            series_number=meta.get("series_number"),  # type: ignore[arg-type]
+            number_of_volumes=meta.get("number_of_volumes"),  # type: ignore[arg-type]
+            publisher=meta.get("publisher"),  # type: ignore[arg-type]
+            place=meta.get("place"),  # type: ignore[arg-type]
         ))
     return results

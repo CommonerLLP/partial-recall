@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib import resources
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 # Migration filenames must follow NNNN_description.sql; sorted lexicographically.
 MIGRATIONS_PACKAGE = "partial_recall.store.migrations"

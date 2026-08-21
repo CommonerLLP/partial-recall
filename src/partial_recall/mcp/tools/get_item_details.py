@@ -132,6 +132,19 @@ async def handle_get_item_details(
     # none of these fields are populated.
     library_location = {k: v for k, v in library_location.items() if v}
 
+    # #41: the fields that tell one volume of a set from another. Same
+    # defensive read and same drop-empties rule as above.
+    bibliographic = {
+        "volume": _safe_get(item_row, "volume"),
+        "edition": _safe_get(item_row, "edition"),
+        "series": _safe_get(item_row, "series"),
+        "series_number": _safe_get(item_row, "series_number"),
+        "number_of_volumes": _safe_get(item_row, "number_of_volumes"),
+        "publisher": _safe_get(item_row, "publisher"),
+        "place": _safe_get(item_row, "place"),
+    }
+    bibliographic = {k: v for k, v in bibliographic.items() if v}
+
     collections = _fetch_collections(
         store, corpus=item_row["corpus"], item_key=item_row["item_key"]
     )
@@ -147,6 +160,7 @@ async def handle_get_item_details(
             "abstract": item_row["abstract"],
             "last_indexed_at": item_row["last_indexed_at"],
             "corpus_ref": item_row["corpus_ref"],
+            "bibliographic": bibliographic,
             "library_location": library_location,
             "collections": collections,
         },
@@ -214,7 +228,8 @@ def _fetch_item(
             """
             SELECT item_key, corpus, item_type, title, date, creators_json,
                    abstract, last_indexed_at, corpus_ref,
-                   archive, archive_location, call_number, library_catalog
+                   archive, archive_location, call_number, library_catalog,
+                   volume, edition, series, series_number, number_of_volumes, publisher, place
             FROM items
             WHERE corpus = ? AND item_key = ?
             LIMIT 1
@@ -225,7 +240,8 @@ def _fetch_item(
         """
         SELECT item_key, corpus, item_type, title, date, creators_json,
                abstract, last_indexed_at, corpus_ref,
-               archive, archive_location, call_number, library_catalog
+               archive, archive_location, call_number, library_catalog,
+               volume, edition, series, series_number, number_of_volumes, publisher, place
         FROM items
         WHERE item_key = ?
         LIMIT 1
