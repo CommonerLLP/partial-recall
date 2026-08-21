@@ -13,6 +13,10 @@ torchvision, and opencv, and it pins an older `transformers` than
     pip install "partial-recall[docling]"
 
 The import is lazy. Nothing here loads unless the backend is selected.
+
+This backend is the one part of partial-recall that is not offline. The
+first conversion downloads OCR and layout weights from HuggingFace.
+Every run after that is local.
 """
 
 from __future__ import annotations
@@ -37,11 +41,23 @@ _INSTALL_HINT = (
 
 @lru_cache(maxsize=1)
 def _converter() -> Any:
-    """Build the Docling converter once. Model load is slow."""
+    """Build the Docling converter once. Model load is slow.
+
+    The first call downloads OCR and layout weights from HuggingFace and
+    can take minutes. Say so before it starts, or it reads as a hang in
+    the middle of an index run.
+    """
     try:
         from docling.document_converter import DocumentConverter
     except ImportError as e:
         raise PdfExtractionError(_INSTALL_HINT) from e
+    log.info(
+        "docling.converter.loading",
+        note=(
+            "Loading Docling models. The first run downloads OCR and layout "
+            "weights from HuggingFace and needs network. Later runs are local."
+        ),
+    )
     return DocumentConverter()
 
 

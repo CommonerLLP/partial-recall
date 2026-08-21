@@ -128,6 +128,11 @@ pulls torch, torchvision, and opencv, and it pins an older `transformers` than
 `sentence-transformers` wants. The `all` extra therefore excludes it. Install
 docling in its own environment.
 
+**Docling is the one part of the engine that needs network.** Its first run
+downloads OCR and layout weights from HuggingFace, then caches them. The
+default backend never reaches the network. Stay on `pymupdf` to keep a
+machine fully offline.
+
 The backend is a front-end to the corpus. It changes what reaches the chunker.
 It does not touch chunking, embeddings, FTS, or the vector store.
 
