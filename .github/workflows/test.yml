@@ -49,6 +49,24 @@ jobs:
           partial-recall doctor || true
           partial-recall --version
 
+  lockfile:
+    name: uv lock --check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # uv.lock drifted twice without anyone noticing, because nothing
+      # asked it. #42 caught a stale lock at release time. #54 found the
+      # [docling] extra added in #50 with no relock. Neither showed up as
+      # a test failure, and git reports no conflict for either shape.
+      - name: Fail if uv.lock disagrees with pyproject.toml
+        run: |
+          uv lock --check
+
   mcp-versions:
     name: pytest (mcp ${{ matrix.mcp }})
     runs-on: ubuntu-22.04
