@@ -18,7 +18,7 @@ Categories asserted absent in the rendered output:
      keys (api_key, token, secret, password, authorization, bearer,
      session_id, cookie, private_key).
   3. macOS / Linux / Windows home-directory paths
-     (/Users/<name>, /home/<name>, C:\\Users\\<name>).
+     (/Users/<name>, /home/<name>, C:\\Users\\<name>).  # leak-ok
 
 The test runs once per output format (human + json).
 """
@@ -47,8 +47,8 @@ _SENSITIVE_VALUES = {
     "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END",
 }
 _HOME_PATHS = [
-    "/Users/scholar/Library/Application Support/partial-recall/vectors.sqlite",
-    "/home/scholar/Documents/library.bib",
+    "/Users/scholar/Library/Application Support/partial-recall/vectors.sqlite",  # leak-ok
+    "/home/scholar/Documents/library.bib",  # leak-ok
     r"C:\Users\Scholar\Zotero\zotero.sqlite",
 ]
 
@@ -73,7 +73,7 @@ def _drain_streams(level: str, format: str) -> str:
     log.info(
         "test.combined",
         api_key=_FAKE_GEMINI_KEY,
-        msg="loading /Users/scholar/.config/partial-recall/config.toml",
+        msg="loading /Users/scholar/.config/partial-recall/config.toml",  # leak-ok
     )
 
     return buf.getvalue()

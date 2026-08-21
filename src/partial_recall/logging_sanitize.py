@@ -21,7 +21,7 @@ classes for partial-recall:
 
   * Gemini API keys (and any future provider keys).
   * Filesystem paths that identify the user or their corpus location
-    (e.g. ``/Users/scholar/Zotero/zotero.sqlite``).
+    (e.g. a home-directory path to ``Zotero/zotero.sqlite``).
 
 Not in scope (deliberate, v0.2.0):
 
@@ -69,13 +69,13 @@ _SENSITIVE_KEY_PATTERNS = re.compile(
 _REDACTED = "***"
 
 # Detect absolute paths. We're conservative: full-string-or-substring
-# match for /Users/<user>/, /home/<user>/, and C:\Users\<user>\ shapes.
+# match for /Users/<user>/, /home/<user>/, and C:\Users\<user>\ shapes.  # leak-ok
 # Matching on substring (not full-string) lets us catch paths embedded
-# in longer messages like "opened /Users/scholar/Zotero/zotero.sqlite".
+# in longer messages like "opened /Users/<user>/Zotero/zotero.sqlite".  # leak-ok
 _HOME_DIR_RE = re.compile(
     r"""
     (
-        /Users/[^/\s]+
+        /Users/[^/\s]+  # leak-ok
       | /home/[^/\s]+
       | [A-Za-z]:\\Users\\[^\\\s]+
     )
@@ -118,7 +118,7 @@ def _redact_value_shapes(value: str) -> str:
 
 
 def _redact_home_paths(value: str) -> str:
-    """Replace any /Users/<user> or /home/<user> prefix with ~."""
+    """Replace any /Users/<user> or /home/<user> prefix with ~."""  # leak-ok
     return _HOME_DIR_RE.sub("~", value)
 
 
