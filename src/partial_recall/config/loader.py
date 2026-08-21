@@ -11,6 +11,7 @@ from tomlkit import TOMLDocument
 
 from partial_recall.config.models import PartialRecallConfig
 from partial_recall.errors import ConfigError
+from partial_recall.extract.pdf import set_pdf_backend
 from partial_recall.paths import ensure_parent_directory
 
 CONFIG_TEMPLATE = """\
@@ -62,9 +63,13 @@ def load_config(path: Path) -> PartialRecallConfig:
     except tomlkit.exceptions.TOMLKitError as e:
         raise ConfigError(f"cannot parse TOML in {path}: {e}") from e
     try:
-        return PartialRecallConfig.model_validate(_doc_to_dict(doc))
+        cfg = PartialRecallConfig.model_validate(_doc_to_dict(doc))
     except ValidationError as e:
         raise ConfigError(f"config validation failed in {path}:\n{e}") from e
+    # Apply the PDF backend here so every entry point honours it. The five
+    # adapter call sites read the process setting and need no plumbing.
+    set_pdf_backend(cfg.index.pdf_backend)
+    return cfg
 
 
 def save_config(cfg: PartialRecallConfig, path: Path) -> None:
