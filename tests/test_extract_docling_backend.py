@@ -123,22 +123,26 @@ def test_the_import_stays_lazy() -> None:
 
 
 def test_load_config_applies_the_configured_backend(tmp_path: Path) -> None:
-    from partial_recall.config.loader import load_config
+    """Round-trip through save_config so Windows paths stay TOML-safe."""
+    from partial_recall.config.loader import load_config, save_config
+    from partial_recall.config.models import (
+        IndexConfig,
+        PartialRecallConfig,
+        ZoteroConfig,
+    )
 
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(
-        f"""
-config_schema_version = 1
-
-[index]
-vector_db_path = "{tmp_path / 'vectors.sqlite'}"
-pdf_backend = "docling"
-
-[zotero]
-sqlite_path = "{tmp_path / 'zotero.sqlite'}"
-storage_path = "{tmp_path / 'storage'}"
-""",
-        encoding="utf-8",
+    save_config(
+        PartialRecallConfig(
+            index=IndexConfig(
+                vector_db_path=tmp_path / "vectors.sqlite", pdf_backend="docling"
+            ),
+            zotero=ZoteroConfig(
+                sqlite_path=tmp_path / "zotero.sqlite",
+                storage_path=tmp_path / "storage",
+            ),
+        ),
+        cfg_path,
     )
     cfg = load_config(cfg_path)
     assert cfg.index.pdf_backend == "docling"
