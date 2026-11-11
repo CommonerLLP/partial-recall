@@ -94,11 +94,23 @@ def fetch_zotero_attachment(
     # 3. Check local first
     # Zotero linkMode:
     # 0 = imported_url, 1 = imported_file, 2 = linked_file, 3 = linked_uri
-    if link_mode == 2 and path_val.startswith("attachments:"):
-        # linked file relative to Zotero's Base Attachment Directory
-        # Zotero doesn't store the base attachment directory in sqlite in a simple way
-        # it might be in prefs.js. For now, we return absolute if it's absolute, else error.
-        pass
+    if link_mode == 2:
+        linked_path = None
+        if path_val.startswith("attachments:") and config.base_attachment_path:
+            linked_path = config.base_attachment_path / path_val.removeprefix("attachments:")
+        elif Path(path_val).is_absolute():
+            linked_path = Path(path_val)
+        if (
+            linked_path is not None
+            and linked_path.is_file()
+            and linked_path.suffix.lower()
+            == dict(_FETCHABLE).get((content_type or "").lower())
+        ):
+            text = _extract(linked_path) if extract_text else None
+            return FetchResult(
+                item_key, att_key, linked_path, text, "local", content_type
+            )
+        return FetchResult(item_key, att_key, None, None, None, content_type)
 
     suffix = dict(_FETCHABLE).get((content_type or "").lower(), ".pdf")
 

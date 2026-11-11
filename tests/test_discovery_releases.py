@@ -172,6 +172,17 @@ def test_sitemap_first_run_seeds_then_diff_catches_new(monkeypatch, tmp_path) ->
     assert [r.title for r in second["results"]] == ["Computing in the Age of Decolonization"]
 
 
+def test_first_sitemap_query_returns_catalogue_results(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(rel, "SITEMAP_DIR", tmp_path)
+    monkeypatch.setattr(rel, "_sitemap_book_urls", lambda cfg: [BANERJEE_URL])
+    monkeypatch.setattr(rel, "_openlibrary", lambda *args, **kwargs: [
+        Release("Current book", "", "Princeton University Press", "2026", "")
+    ])
+    result = find_books(press="princeton", subject=["India"])
+    assert [book.title for book in result["results"]] == ["Current book"]
+    assert result["sources"] == ["openlibrary", "sitemap:princeton(baseline seeded: 1 urls)"]
+
+
 def test_sitemap_sub_filter_descends_only_product_subsitemaps(monkeypatch) -> None:
     # WordPress presses (Yale/Cornell/Minnesota/Washington/Columbia) keep books in
     # dedicated `…-products.N.xml.gz` sub-sitemaps; sub_filter must follow only those.

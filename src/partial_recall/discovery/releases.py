@@ -393,7 +393,7 @@ def find_books(
     """Route a release query to the source that owns its axes, then merge.
 
       field (discipline/studies)         -> New Books Network channel
-      press x subject (no place/year)    -> OpenLibrary (publisher x subject)
+      press x subject (no place/year)    -> sitemap, then OpenLibrary on first seed
       topic + place + year (+ CIP)       -> Library of Congress (LCSH/LCC)
 
     `since` (YYYY-MM-DD) filters NBN by episode air date. `press` is applied as a
@@ -411,6 +411,9 @@ def find_books(
         # before LoC/OpenLibrary catalogue them). No third party.
         sm = press_new_from_sitemap(p, subject, limit=limit)
         results += sm["results"]
+        if sm["seeded"] and subject and not (place or year):
+            results += _openlibrary(subject, press, year, rows=limit)
+            sources.append("openlibrary")
         sources.append(f"sitemap:{p['short']}" +
                        (f"(baseline seeded: {sm['seeded']} urls)" if sm["seeded"]
                         else f"({sm['new_total']} new)"))

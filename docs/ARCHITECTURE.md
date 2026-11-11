@@ -4,16 +4,14 @@
 > CommonerLLP repo that touches corpora, search, crawling, or MCP
 > serving. Not optional. Read before scoping any new feature.
 >
-> **Last updated: 2026-08-08** (repo names only)
+> **Last updated: 2026-11-11**
 >
 > **Naming note (2026-08-08):** repo names in this doc were updated for two
 > renames that happened after it was written — `budget-crawler` →
 > `public-finance` (2026-06-20) and `sansad-semantic-crawler` →
-> `commoner-analyse` (2026-07-06, v2.1.0). The layer diagrams otherwise
-> predate the extraction of acquisition into `commoner-probe`: where this doc
-> describes the analysis repo as owning the crawl library, that role now
-> belongs to `commoner-probe`. For current org topology, `_org/architecture.md`
-> is canonical.
+> `commoner-analyse` (2026-07-06, v2.1.0). Some detailed diagrams predate
+> the extraction of acquisition into `commoner-probe`. For current org
+> topology, `_org/architecture.md` is canonical.
 
 ---
 
@@ -100,7 +98,7 @@ You write ~200 lines. You get a production search stack.
 | `JabRefAdapter` | JabRef bibliography | In progress | `partial-recall` |
 | `CalibreAdapter` | Calibre library | In progress | `partial-recall` |
 | `MarkdownNotesAdapter` | Markdown note directories | In progress | `partial-recall` |
-| `CADAdapter` | Constituent Assembly Debates | **Planned** | `cad-mcp` |
+| `CADAdapter` | Constituent Assembly Debates | Implemented through the external adapter registry | `cad-mcp` |
 | `SansadAdapter` | Lok Sabha Q&A | **Planned** | `commoner-analyse` |
 | `BudgetAdapter` | OBI / state budget documents | **Planned** | `public-finance` |
 
@@ -120,8 +118,8 @@ Set it with `pdf_backend` under `[index]` in `config.toml`.
 
 **Use `docling` for scanned or multi-column documents.** The block reader sorts
 text by position, which is right for an article and wrong for a table. It
-collapses a row into one padded line, drops the column headers, and can order a
-page's blocks in a way that reads plausibly and is not the document's order.
+collapses a row into one padded line and drops the column headers. It can
+also put a page's blocks in a plausible but incorrect order.
 
 **`[docling]` and `[multilingual]` do not belong in one environment.** Docling
 pulls torch, torchvision, and opencv, and it pins an older `transformers` than
@@ -141,7 +139,7 @@ It does not touch chunking, embeddings, FTS, or the vector store.
 A domain repo has exactly three jobs:
 
 **1. Acquire** — crawl, download, probe, scrape the source.
-Domain-specific. No shared code exists for this; each source is different.
+Domain-specific. Each source differs, so no shared acquisition code exists here.
 
 **2. Structure** — parse, segment, normalise into `Item` + `Source` objects
 the adapter protocol understands. Domain intelligence lives here:
@@ -177,18 +175,20 @@ The FolderAdapter handles extraction, chunking, embedding, and indexing.
 Use this for any corpus where the documents are the unit of retrieval
 and you do not need per-document metadata beyond filename + path.
 
-For corpora with rich internal structure (CAD sessions have dates,
-speakers, article references; sansad Q&A has questioner, ministry,
-session number) — write a proper adapter that preserves that structure
-as Item metadata.
+Write a dedicated adapter when a corpus has rich internal structure.
+CAD sessions have dates, speakers, and article references.
+Sansad Q&A has questioner, ministry, and session fields.
+Preserve those fields as Item metadata.
 
 ---
 
 ## The org topology
 
 ```
-Layer 0  commoner-analyse   shared crawl library, parliament sources
-         ↓ pip install (pinned)
+Layer 0  commoner-probe           public-record acquisition
+         ↓ pinned package
+         commoner-analyse          domain analysis
+         ↓ CorpusAdapter instances
 Layer 1  partial-recall            engine: chunk, embed, index, search, serve
          ↓ CorpusAdapter instances
 Layer 2  cad-mcp                   CAD corpus + session/context tools
@@ -209,10 +209,9 @@ Full topology with capability registry: `_org/architecture.md`.
 corpus search through practice. `partial-recall` was extracted from that
 experience as the correct shared solution — a deliberate DRY move.
 
-In May 2026, `cad-mcp` was built with a full duplicate search stack
-(FTS5, MCP server, search tools) in a single session, because this
-architectural contract did not exist as a written document. This file
-exists because of that session.
+In May 2026, `cad-mcp` gained a duplicate search stack in one session.
+That stack included FTS5, an MCP server, and search tools.
+This architecture file now records the shared engine boundary.
 
 The extraction from sansad to partial-recall was the right move.
 Repeating that extraction in every new domain repo is the wrong move.
@@ -263,8 +262,8 @@ Repeating that extraction in every new domain repo is the wrong move.
 ║  corpus/adapters/                                                    ║
 ║  ├── ZoteroAdapter.list_items()   reads ~/Zotero/zotero.sqlite (RO) ║
 ║  ├── FolderAdapter.list_items()   walks directory, reads files       ║
-║  ├── [CADAdapter]                 PLANNED — lives in cad-mcp         ║
-║  └── [SansadAdapter]              PLANNED — lives in commoner-analyse║
+║  ├── CAD adapter                  external; implemented in cad-mcp    ║
+║  └── Sansad adapter               planned in commoner-analyse       ║
 ║                                                                      ║
 ║  extract/pdf.py                                                      ║
 ║  └── extract_pdf_text(path)       backend: pymupdf | docling         ║
