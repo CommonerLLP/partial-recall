@@ -60,6 +60,7 @@ Pointer to a Zotero library. Required if `--source zotero`.
 | `enabled` | `bool` | `true` | Set `false` to skip this source. |
 | `sqlite_path` | `Path` | **required** | Path to `zotero.sqlite`. Usually `~/Zotero/zotero.sqlite`. |
 | `storage_path` | `Path` | **required** | Path to Zotero's `storage/` directory. Usually `~/Zotero/storage`. |
+| `base_attachment_path` | `Path` | `None` | Base directory for linked files whose Zotero path starts with `attachments:`. |
 
 ## `[folder]`
 

@@ -167,6 +167,38 @@ def test_fetch_finds_an_epub_only_attachment(
     assert EPUB_BODY in res.text
 
 
+def test_fetch_resolves_linked_file_without_web_api(
+    library: tuple[Path, Path], tmp_path: Path
+) -> None:
+    db, storage = library
+    base = tmp_path / "linked"
+    linked = base / "book.epub"
+    _write_epub(linked, EPUB_BODY)
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE itemAttachments SET linkMode = 2, path = ? WHERE itemID = 11",
+        ("attachments:book.epub",),
+    )
+    con.commit()
+    con.close()
+    a = ZoteroAdapter(sqlite_path=db, storage_path=storage)
+    try:
+        result = fetch_zotero_attachment(
+            item_key="EPUBITEM",
+            adapter=a,
+            config=ZoteroConfig(
+                sqlite_path=db, storage_path=storage, base_attachment_path=base
+            ),
+            cache_dir=tmp_path / "cache",
+            extract_text=True,
+        )
+    finally:
+        a.close()
+    assert result.path == linked
+    assert result.text is not None
+    assert EPUB_BODY in result.text
+
+
 def test_fetch_prefers_the_pdf_when_an_item_has_both(
     library: tuple[Path, Path], tmp_path: Path
 ) -> None:
